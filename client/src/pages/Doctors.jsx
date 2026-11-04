@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import API from "../api";
 import "../styles/doctor.css";
 import { useNavigate } from "react-router-dom";
+import { FaUserMd, FaArrowLeft, FaEdit, FaTrash, FaPlus, FaCheck, FaTimes, FaPhone, FaEnvelope, FaBriefcase, FaChevronLeft, FaChevronRight } from "react-icons/fa";
+import { BsThreeDotsVertical, BsHospital, BsInbox } from "react-icons/bs";
+import { toast } from "react-toastify";
 
 export default function Doctors() {
   const navigate = useNavigate();
@@ -39,7 +42,7 @@ export default function Doctors() {
     fetchDoctors();
   }, []);
 
-  //  Pagination logic
+  // Pagination logic
   const indexOfLast = currentPage * recordsPerPage;
   const indexOfFirst = indexOfLast - recordsPerPage;
   const currentDoctors = doctors.slice(indexOfFirst, indexOfLast);
@@ -67,11 +70,12 @@ export default function Doctors() {
         headers: { role: getUserRole() },
       });
 
+      toast.success("Doctor created successfully!");
       fetchDoctors();
       resetForm();
       setCurrentPage(1); // reset page
     } catch (error) {
-      alert(error.response?.data?.error || "Failed to create doctor");
+      toast.error(error.response?.data?.error || "Failed to create doctor");
     }
   };
 
@@ -96,28 +100,77 @@ export default function Doctors() {
         headers: { role: getUserRole() },
       });
 
+      toast.success("Doctor updated successfully!");
       fetchDoctors();
       resetForm();
       setCurrentPage(1);
     } catch (error) {
-      alert(error.response?.data?.error || "Failed to update doctor");
+      toast.error(error.response?.data?.error || "Failed to update doctor");
     }
   };
 
   // Delete
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete?")) return;
+  const handleDelete = (id) => {
+    toast(
+      ({ closeToast }) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <span style={{ fontSize: "13.5px", fontWeight: "600", color: "#1e293b" }}>
+            Are you sure you want to delete this Doctor profile?
+          </span>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+            <button
+              onClick={closeToast}
+              style={{
+                padding: "5px 12px",
+                borderRadius: "6px",
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                color: "#475569",
+                fontSize: "12px",
+                fontWeight: "600",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                closeToast();
+                try {
+                  await API.delete(`/doctors/${id}`, {
+                    headers: { role: getUserRole() },
+                  });
 
-    try {
-      await API.delete(`/doctors/${id}`, {
-        headers: { role: getUserRole() },
-      });
-
-      fetchDoctors();
-      setCurrentPage(1);
-    } catch (error) {
-      alert(error.response?.data?.error || "Failed to delete doctor");
-    }
+                  toast.success("Doctor deleted successfully!");
+                  fetchDoctors();
+                  setCurrentPage(1);
+                } catch (error) {
+                  toast.error(error.response?.data?.error || "Failed to delete doctor");
+                }
+              }}
+              style={{
+                padding: "5px 12px",
+                borderRadius: "6px",
+                border: "none",
+                background: "#ef4444",
+                color: "#ffffff",
+                fontSize: "12px",
+                fontWeight: "600",
+                cursor: "pointer",
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      ),
+      {
+        autoClose: 5000,
+        closeOnClick: false,
+        draggable: false,
+        position: "top-center",
+      }
+    );
   };
 
   // Reset Form
@@ -138,21 +191,25 @@ export default function Doctors() {
     <div className="doctor-page">
       {/* Header */}
       <div className="header">
-        <h2>Doctor Management</h2>
-        <button
-      className="back-btn"
-      onClick={() => navigate(-1)}
-    >
-       Back
-    </button>
-        <span>{doctors.length} records</span>
+        <div className="header-title-group">
+          <button className="back-btn" onClick={() => navigate(-1)} title="Go back">
+            <FaArrowLeft />
+            <span>Back</span>
+          </button>
+          <h2>
+            <FaUserMd className="header-icon" />
+            <span>Medical Staff Management</span>
+          </h2>
+        </div>
+        <span className="header-badge">{doctors.length} Records</span>
       </div>
 
-      {/* Form */}
+      {/* Form Panel */}
       <div className="form">
         <div className="form-group">
+          <label className="form-label">Doctor Full Name</label>
           <input
-            placeholder="Doctor Name"
+            placeholder="Dr. Full Name"
             value={form.name}
             onChange={(e) => {
               setForm({ ...form, name: e.target.value });
@@ -163,8 +220,9 @@ export default function Doctors() {
         </div>
 
         <div className="form-group">
+          <label className="form-label">Medical Specialty</label>
           <input
-            placeholder="Specialty"
+            placeholder="e.g. Cardiology, Neurology"
             value={form.specialty}
             onChange={(e) => {
               setForm({ ...form, specialty: e.target.value });
@@ -177,8 +235,9 @@ export default function Doctors() {
         </div>
 
         <div className="form-group">
+          <label className="form-label">Experience (Years)</label>
           <input
-            placeholder="Experience (years)"
+            placeholder="Years of practice"
             value={form.experience}
             onChange={(e) => {
               setForm({ ...form, experience: e.target.value });
@@ -191,8 +250,9 @@ export default function Doctors() {
         </div>
 
         <div className="form-group">
+          <label className="form-label">Official Email</label>
           <input
-            placeholder="Email"
+            placeholder="doctor@hospital.org"
             value={form.email}
             onChange={(e) => {
               setForm({ ...form, email: e.target.value });
@@ -202,9 +262,10 @@ export default function Doctors() {
         </div>
 
         <div className="form-group">
+          <label className="form-label">Password {editingId && "(Leave blank to keep current)"}</label>
           <input
             type="password"
-            placeholder="Password"
+            placeholder="Secure password"
             value={form.password}
             onChange={(e) => {
               setForm({ ...form, password: e.target.value });
@@ -214,8 +275,54 @@ export default function Doctors() {
         </div>
 
         <div className="form-group">
+          <label className="form-label">Clinic / Hospital Name</label>
           <input
-            placeholder="Mobile"
+            placeholder="e.g. ABC CLINIC"
+            value={form.clinicName || ""}
+            onChange={(e) => setForm({ ...form, clinicName: e.target.value })}
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">City</label>
+          <input
+            placeholder="e.g. Betul or Ahmedabad"
+            value={form.city || ""}
+            onChange={(e) => setForm({ ...form, city: e.target.value })}
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">State</label>
+          <input
+            placeholder="e.g. Madhya Pradesh"
+            value={form.state || ""}
+            onChange={(e) => setForm({ ...form, state: e.target.value })}
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Full Address</label>
+          <input
+            placeholder="e.g. Khedi Road, Near Civil Lines"
+            value={form.address || ""}
+            onChange={(e) => setForm({ ...form, address: e.target.value })}
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">OPD Timings</label>
+          <input
+            placeholder="e.g. 09:00 AM - 08:00 PM"
+            value={form.timing || ""}
+            onChange={(e) => setForm({ ...form, timing: e.target.value })}
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Direct Mobile</label>
+          <input
+            placeholder="3425678904"
             value={form.mobile}
             onChange={(e) => {
               setForm({ ...form, mobile: e.target.value });
@@ -227,27 +334,44 @@ export default function Doctors() {
           )}
         </div>
 
-        {editingId ? (
-          <button onClick={handleUpdate}>Update</button>
-        ) : (
-          <button onClick={handleCreate}>Add</button>
-        )}
+        <div className="form-actions-row">
+          {editingId ? (
+            <>
+              <button className="update-btn" onClick={handleUpdate}>
+                <FaCheck />
+                <span>Save Changes</span>
+              </button>
+              <button className="cancel-btn" onClick={resetForm}>
+                <FaTimes />
+                <span>Cancel</span>
+              </button>
+            </>
+          ) : (
+            <button className="add-btn" onClick={handleCreate}>
+              <FaPlus />
+              <span>Add Doctor</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
       <div className="table-wrapper">
         {doctors.length === 0 ? (
-          <div className="empty">No doctors found</div>
+          <div className="empty">
+            <BsInbox size={28} style={{ marginBottom: "8px", opacity: 0.5 }} />
+            <p>No Doctor profiles recorded</p>
+          </div>
         ) : (
           <>
             <table>
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Specialty</th>
+                  <th>Doctor</th>
+                  <th>Clinical Specialty</th>
                   <th>Experience</th>
-                  <th>Mobile</th>
-                  <th>Email</th>
+                  <th>Contact Mobile</th>
+                  <th>Email Address</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -255,19 +379,33 @@ export default function Doctors() {
               <tbody>
                 {currentDoctors.map((d) => (
                   <tr key={d.id}>
-                    <td>{d.name}</td>
-                    <td>{d.specialty}</td>
-                    <td>{d.experience}</td>
-                    <td>{d.mobile}</td>
-                    <td>{d.user?.email}</td>
+                    <td>
+                      <div className="table-cell-bold">{d.name}</div>
+                    </td>
+                    <td>
+                      <span className="doctor-specialty-chip">{d.specialty}</span>
+                    </td>
+                    <td>
+                      <span className="experience-badge">{d.experience} Years</span>
+                    </td>
+                    <td>
+                      <span className="table-cell-muted">{d.mobile || "—"}</span>
+                    </td>
+                    <td>
+                      <span className="table-cell-muted">{d.user?.email || "—"}</span>
+                    </td>
                     <td>
                       <div className="action-menu">
-                        <span className="dots">⋮</span>
+                        <button className="dots-btn" title="Actions">
+                          <BsThreeDotsVertical />
+                        </button>
 
                         <div className="dropdown">
-                          <button onClick={() => handleEdit(d)}>Edit</button>
-                          <button onClick={() => handleDelete(d.id)}>
-                            Delete
+                          <button onClick={() => handleEdit(d)}>
+                            <FaEdit /> Edit
+                          </button>
+                          <button className="delete-opt" onClick={() => handleDelete(d.id)}>
+                            <FaTrash /> Delete
                           </button>
                         </div>
                       </div>
@@ -283,24 +421,20 @@ export default function Doctors() {
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(currentPage - 1)}
               >
-                Prev
+                <FaChevronLeft />
+                <span>Prev</span>
               </button>
 
-              {[...Array(totalPages)].map((_, i) => (
-                <button
-                  key={i}
-                  className={currentPage === i + 1 ? "active" : ""}
-                  onClick={() => setCurrentPage(i + 1)}
-                >
-                  {i + 1}
-                </button>
-              ))}
+              <span className="pagination-page-indicator">
+                Page {currentPage} of {totalPages || 1}
+              </span>
 
               <button
-                disabled={currentPage === totalPages}
+                disabled={currentPage === totalPages || totalPages === 0}
                 onClick={() => setCurrentPage(currentPage + 1)}
               >
-                Next
+                <span>Next</span>
+                <FaChevronRight />
               </button>
             </div>
           </>

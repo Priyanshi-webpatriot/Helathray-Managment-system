@@ -1,4 +1,5 @@
 import prisma from "../prisma/client.js";
+import { processReminders } from "../utils/reminderCron.js";
 
 //  PATIENT BOOK APPOINTMENT
 export const bookAppointmentByPatient = async (req, res) => {
@@ -57,6 +58,9 @@ export const bookAppointmentByPatient = async (req, res) => {
 
     res.status(201).json(appointment);
 
+    // Process reminders immediately so patient and doctor don't wait for next cron tick
+    processReminders().catch((e) => console.error("Immediate reminder trigger error:", e.message));
+
   } catch (error) {
     console.log(error);
     res.status(500).json({ error: "Failed to book appointment" });
@@ -78,16 +82,24 @@ export const getPatientAppointments = async (req, res) => {
 
     const appointments = await prisma.appointment.findMany({
       where: { patientId: patient.id },
-      select: {
-        doctorId: true,
-        date: true,
-        time: true,
+      include: {
+        doctor: {
+          select: {
+            id: true,
+            name: true,
+            specialty: true,
+            mobile: true,
+            experience: true,
+          },
+        },
+      },
+      orderBy: {
+        date: "desc",
       },
     });
     res.json(appointments);
   } catch (error) {
-    console.log(error);appointmentcontrooler
-    
+    console.log(error);
     res.status(500).json({ error: "Failed to fetch patient appointments" });
   }
 }
