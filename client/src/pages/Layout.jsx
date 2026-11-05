@@ -28,15 +28,15 @@ export default function Layout() {
     const fetchReminders = async () => {
       try {
         const endpoint = user.role === "patient" ? "/reminders/patient-reminders" : "/reminders/doctor-reminders";
-        const res = await API.get(endpoint, {
-          headers: {
-            role: user.role,
-            userid: user.id,
-          },
-        });
-        setReminders(res.data);
+        const res = await API.get(endpoint);
+        if (Array.isArray(res.data)) {
+          setReminders(res.data);
+        } else {
+          setReminders([]);
+        }
       } catch (error) {
         console.error("Failed to fetch reminders in layout:", error);
+        setReminders([]);
       }
     };
 
@@ -48,6 +48,7 @@ export default function Layout() {
 
   const logout = () => {
     localStorage.removeItem("user");
+    localStorage.removeItem("token");
     navigate("/");
   };
 

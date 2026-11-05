@@ -1,101 +1,122 @@
-  import bcrypt from "bcrypt";
-  import prisma from "../prisma/client.js";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import prisma from "../prisma/client.js";
 
-  // REGISTER
-  export const registerUser = async (req, res) => {
-    try {
-      const { name, email, password, role, age, gender, contact, specialty, experience, mobile, clinicName, city, state, address, timing } = req.body;
+const JWT_SECRET = process.env.JWT_SECRET || "healthray_jwt_secret_key";
 
-      const existingUser = await prisma.user.findUnique({
-        where: { email }
-      });
+// REGISTER
+export const registerUser = async (req, res) => {
+  try {
+    const { name, email, password, role, age, gender, contact, specialty, experience, mobile, clinicName, city, state, address, timing } = req.body;
 
-      if (existingUser) {
-        return res.status(400).json({ error: "User already exists" });
+    // Block admin registration through public endpoint
+    if (role === "admin") {
+      return res.status(403).json({ error: "Admin accounts cannot be created through registration." });
+    }
+
+    // Only allow valid roles
+    if (!["patient", "doctor"].includes(role)) {
+      return res.status(400).json({ error: "Invalid role. Only 'patient' or 'doctor' are allowed." });
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ error: "User already exists" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create User
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role
       }
+    });
 
-      const hashedPassword = await bcrypt.hash(password, 10);
-
-      //   Create User
-      const user = await prisma.user.create({
+    // Create related profile
+    if (role === "patient") {
+      await prisma.patient.create({
         data: {
           name,
-          email,
-          password: hashedPassword,
-          role
+          age: Number(age),
+          gender,
+          contact,
+          userId: user.id
         }
       });
-
-      //   Create related profile
-      if (role === "patient") {
-        await prisma.patient.create({
-          data: {
-            name,
-            age: Number(age),
-            gender,
-            contact,
-            userId: user.id
-          }
-        });
-      }
-      if (role === "doctor") {
-        await prisma.doctor.create({
-          data: {
-            name,
-            specialty: specialty || "General Medicine",
-            userId: user.id,
-            experience: experience || "5+",
-            mobile: mobile || contact, 
-            clinicName: clinicName || `${name.replace(/^Dr\.?\s*/i, "")} Clinic`,
-            city: city || "Ahmedabad",
-            state: state || "Gujarat",
-            address: address || "Main Hospital Road",
-            timing: timing || "09:00 AM - 08:00 PM"
-          }
-        });
-      }
-
-      res.status(201).json({ message: "User registered successfully" });
-
-    } catch (error) {
-      console.log(error);
-      res.status(500).json({ error: "Registration failed" });
     }
-  };
-
-  // LOGIN
-  export const loginUser = async (req, res) => {
-    try {
-      const { email, password } = req.body;
-
-      console.log("Login attempt:", email);
-
-      const user = await prisma.user.findUnique({
-        where: { email }
-      });
-
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      const isMatch = await bcrypt.compare(password, user.password);
-
-      if (!isMatch) {
-        return res.status(400).json({ error: "Invalid password" });
-      }
-
-      res.status(200).json({
-        message: "Login successful",
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role
+    if (role === "doctor") {
+      await prisma.doctor.create({
+        data: {
+          name,
+          specialty: specialty || "General Medicine",
+          userId: user.id,
+          experience: experience || "5+",
+          mobile: mobile || contact,
+          clinicName: clinicName || `${name.replace(/^Dr\.?\s*/i, "")} Clinic`,
+          city: city || "Ahmedabad",
+          state: state || "Gujarat",
+          address: address || "Main Hospital Road",
+          timing: timing || "09:00 AM - 08:00 PM"
         }
       });
-
-    } catch (error) {
-      console.log("Login error:", error);
-      res.status(500).json({ error: "Login failed", details: error.message });
     }
-  };
+
+    res.status(201).json({ message: "User registered successfully" });
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: "Registration failed" });
+  }
+};
+
+// LOGIN
+export const loginUser = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    console.log("Login attempt:", email);
+
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res.status(400).json({ error: "Invalid password" });
+    }
+
+    // Sign a JWT token containing the user's id and role
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.status(200).json({
+      message: "Login successful",
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+
+  } catch (error) {
+    console.log("Login error:", error);
+    res.status(500).json({ error: "Login failed", details: error.message });
+  }
+};

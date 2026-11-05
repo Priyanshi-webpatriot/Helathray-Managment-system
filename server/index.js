@@ -1,6 +1,7 @@
 import "./env.js"; // ← MUST be first: loads .env before any other module
 import express from "express";
 import cors from "cors";
+import jwt from "jsonwebtoken";
 import authRoutes from "./routes/authRoutes.js";
 import patientRoutes from "./routes/patientRoutes.js";
 import doctorRoutes from "./routes/doctorRoutes.js";
@@ -13,10 +14,31 @@ import reminderRoutes from "./routes/reminderRoutes.js";
 import consultationNoteRoutes from "./routes/consultationNoteRoutes.js";
 
 const app = express();
+const JWT_SECRET = process.env.JWT_SECRET || "healthray_jwt_secret_key";
 
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// ── JWT DECODE MIDDLEWARE ──
+// Decodes the JWT token (if present) and populates req.user, req.headers.role,
+// and req.headers.userid so all existing controllers continue to work unchanged.
+app.use((req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.split(" ")[1];
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.user = decoded;
+      // Keep legacy header fields populated for backward compatibility
+      req.headers.role = decoded.role;
+      req.headers.userid = String(decoded.id);
+    } catch {
+      // Invalid token — req.user stays undefined; protected routes will reject via checkRole
+    }
+  }
+  next();
+});
 
 // ── GLOBAL BACKEND REQUEST LOGGER ──
 app.use((req, res, next) => {

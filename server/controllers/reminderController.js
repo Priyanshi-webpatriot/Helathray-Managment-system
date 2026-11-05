@@ -108,12 +108,7 @@ export const getDoctorReminders = async (req, res) => {
         res.json(reminders);
 
     } catch (error) {
-
-        console.log(error);
-        console.log("USER ID:", userId);
-
-console.log("DOCTOR:", doctor);
-
+        console.log("Error in getDoctorReminders:", error);
         res.status(500).json({
             error: "Failed to fetch doctor reminders",
         });

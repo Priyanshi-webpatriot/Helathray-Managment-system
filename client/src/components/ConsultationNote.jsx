@@ -180,12 +180,9 @@ export default function ConsultationNote({ patient }) {
     };
   }, [audioBlob]);
 
-  // Auto-open modal when patient is passed or selected
+  // Auto-open modal when requested via autoOpen prop or when patient is passed
   useEffect(() => {
     if (patient) {
-      console.log(" [AI Note Writer] Auto-opening modal for patient:", patient?.name);
-      resetAll();
-      setIsOpen(true);
       fetchPastNotes();
     }
   }, [patient?.id]);

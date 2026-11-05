@@ -2,7 +2,7 @@ import { useState } from "react";
 import API from "../api";
 import "../styles/auth.css";
 import { BsHospital, BsShieldLock } from "react-icons/bs";
-import { FaUserPlus, FaUserMd, FaUserInjured, FaUserShield } from "react-icons/fa";
+import { FaUserPlus, FaUserMd, FaUserInjured } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
@@ -74,13 +74,6 @@ export default function Register() {
               onClick={() => setForm({ ...form, role: "doctor" })}
             >
               <FaUserMd /> Doctor
-            </button>
-            <button
-              type="button"
-              className={`role-pill ${form.role === "admin" ? "active" : ""}`}
-              onClick={() => setForm({ ...form, role: "admin" })}
-            >
-              <FaUserShield /> Admin
             </button>
           </div>
         </div>

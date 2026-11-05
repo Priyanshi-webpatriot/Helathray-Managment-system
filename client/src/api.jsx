@@ -1,18 +1,24 @@
 import axios from "axios";
 
 const API = axios.create({
-    baseURL: "http://localhost:3360/api",
+    baseURL: import.meta.env.BASE_URL || "http://localhost:3360/api",
 });
 
-// ── FRONTEND REQUEST LOGGER ──
+// ── FRONTEND REQUEST INTERCEPTOR ──
+// Automatically attaches the JWT token to every request.
+// Individual pages no longer need to manually set role/userid headers.
 API.interceptors.request.use(
     (config) => {
+        const token = localStorage.getItem("token");
+        if (token) {
+            config.headers["Authorization"] = `Bearer ${token}`;
+        }
+
         const time = new Date().toLocaleTimeString();
         const method = (config.method || "GET").toUpperCase();
         console.log(`🌐 [FRONTEND API REQUEST] [${time}] ${method} ${config.url}`, {
             headers: {
-                role: config.headers?.role,
-                userid: config.headers?.userid,
+                Authorization: token ? "Bearer ***" : "none",
                 "Content-Type": config.headers?.["Content-Type"],
             },
             params: config.params,
@@ -41,11 +47,17 @@ API.interceptors.response.use(
         const status = error.response?.status || "NO_RESPONSE";
         const serverError = error.response?.data?.error || error.response?.data?.detail || error.response?.data || error.message;
 
+        // If token is expired or invalid, clear storage and redirect to login
+        if (status === 401) {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            window.location.href = "/";
+        }
+
         console.error(`❌ [FRONTEND API ERROR] [${time}] ${method} ${url} (Status: ${status}):`, {
             errorMessage: error.message,
             serverErrorDetail: serverError,
             responseBody: error.response?.data,
-            headers: error.config?.headers,
         });
         return Promise.reject(error);
     }

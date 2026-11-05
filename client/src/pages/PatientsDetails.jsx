@@ -46,17 +46,21 @@ export default function PatientsDetails() {
     fetchPatients();
   }, []);
 
-  // Auto-select patient if patientId query param is provided
+  // Set default selected patient to first patient if available and none selected
   useEffect(() => {
-    if (patients.length > 0 && targetPatientId) {
-      const found = patients.find((p) => String(p.id) === String(targetPatientId));
-      if (found) {
-        setSelectedPatient(found);
-        const idx = patients.findIndex((p) => String(p.id) === String(targetPatientId));
-        if (idx !== -1) {
-          setCurrentPage(Math.floor(idx / recordsPerPage) + 1);
+    if (patients.length > 0 && !selectedPatient) {
+      if (targetPatientId) {
+        const found = patients.find((p) => String(p.id) === String(targetPatientId));
+        if (found) {
+          setSelectedPatient(found);
+          const idx = patients.findIndex((p) => String(p.id) === String(targetPatientId));
+          if (idx !== -1) {
+            setCurrentPage(Math.floor(idx / recordsPerPage) + 1);
+          }
+          return;
         }
       }
+      setSelectedPatient(patients[0]);
     }
   }, [patients, targetPatientId]);
 
@@ -80,31 +84,11 @@ export default function PatientsDetails() {
             <span>Patients Clinical Analysis</span>
           </h2>
         </div>
-        <span className="header-badge">{patients.length} Registered Records</span>
-      </div>
-
-      {/* Selected Patient Banner if active */}
-      {selectedPatient && (
-        <div className="selected-patient-banner">
-          <div className="selected-patient-meta">
-            <div className="selected-avatar">
-              <FaUserInjured />
-            </div>
-            <div>
-              <h3>Active Analysis: {selectedPatient.name}</h3>
-              <p>
-                {selectedPatient.age} yrs • {selectedPatient.gender} • Blood: {selectedPatient.bloodGroup || "N/A"} • Status: <strong>{selectedPatient.status}</strong>
-              </p>
-            </div>
-          </div>
-          <button 
-            className="clear-patient-btn" 
-            onClick={() => setSelectedPatient(null)}
-          >
-            Close Analysis Workspace
-          </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {selectedPatient && <ConsultationNote patient={selectedPatient} />}
+          <span className="header-badge">{patients.length} Registered Records</span>
         </div>
-      )}
+      </div>
 
       {/* Table */}
       <div className="table-wrapper">
@@ -197,12 +181,8 @@ export default function PatientsDetails() {
         )}
       </div>
 
-      {selectedPatient && (
-        <div className="patient-actions-section">
-          <ConsultationNote patient={selectedPatient} />
-          <DoctorChatBox patient={selectedPatient} />
-        </div>
-      )}
+      {/* Doctor AI Assistant is always present on this page */}
+      <DoctorChatBox patient={selectedPatient} />
     </div>
   );
 }

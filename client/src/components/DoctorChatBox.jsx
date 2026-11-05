@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import API from "../api";
 import "../styles/chatbox.css";
 import ReactMarkdown from "react-markdown";
-import { FaSave, FaFilePdf } from "react-icons/fa";
+import { FaFilePdf } from "react-icons/fa";
 import { FaUserDoctor } from "react-icons/fa6";
 import { toast } from "react-toastify";
 
@@ -281,11 +281,7 @@ Avoid mentioning missing information.
   // =========================
 
   useEffect(() => {
-    if (patient?.id) {
-      setIsOpen(true);
-
-      fetchDoctorChats();
-    }
+    fetchDoctorChats();
   }, [patient?.id]);
 
   return (
@@ -314,18 +310,10 @@ Avoid mentioning missing information.
 
           <div className="action-buttons">
             <button
-              className="action-btn save-btn"
-              onClick={saveMedicalRecord}
-            >
-              <FaSave /> Save Record
-            </button>
-
-            <button
               className="action-btn pdf-btn"
               onClick={generateReport}
             >
               <FaFilePdf /> Save PDF
-
             </button>
           </div>
 

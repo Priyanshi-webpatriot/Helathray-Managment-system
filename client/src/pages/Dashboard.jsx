@@ -1252,69 +1252,6 @@ export default function Dashboard() {
           </div>
         </div> */}
 
-        {/* ── 3. PRACTO PRO & NEXOPD KPI STATS CARDS (MATCHING USER IMAGE 1 EXACTLY) ── */}
-        <div className="doctor-kpi-grid">
-          {/* Card 1 */}
-          <div className="doctor-kpi-card" onClick={() => navigate("/appointments")}>
-            <div className="kpi-card-top">
-              <div className="kpi-icon-wrapper icon-blue">
-                <BsCalendar2Check />
-              </div>
-              <span className="kpi-trend-badge trend-blue">+12% this week</span>
-            </div>
-            <div>
-              <div className="kpi-value">{metrics.appointments}</div>
-              <div className="kpi-title">Scheduled Appointments</div>
-            </div>
-            <div className="kpi-subtext">Click to manage schedule &amp; slots →</div>
-          </div>
-
-          {/* Card 2 */}
-          <div className="doctor-kpi-card" onClick={() => navigate("/patients-details")} style={{ borderColor: "#38bdf8", boxShadow: "0 8px 24px -4px rgba(56, 189, 248, 0.2)" }}>
-            <div className="kpi-card-top">
-              <div className="kpi-icon-wrapper icon-emerald">
-                <FaUserInjured />
-              </div>
-              <span className="kpi-trend-badge trend-up">Active EHR</span>
-            </div>
-            <div>
-              <div className="kpi-value">{metrics.patients}</div>
-              <div className="kpi-title">Patients Under Care</div>
-            </div>
-            <div className="kpi-subtext">Click for EHR &amp; Clinical Analysis →</div>
-          </div>
-
-          {/* Card 3 */}
-          <div className="doctor-kpi-card" onClick={() => navigate("/patients-details")}>
-            <div className="kpi-card-top">
-              <div className="kpi-icon-wrapper icon-purple">
-                <BsFileEarmarkMedical />
-              </div>
-              <span className="kpi-trend-badge trend-blue">SOAP Notes</span>
-            </div>
-            <div>
-              <div className="kpi-value">{metrics.completed}</div>
-              <div className="kpi-title">Completed Consultations</div>
-            </div>
-            <div className="kpi-subtext">Clinical summaries recorded →</div>
-          </div>
-
-          {/* Card 4 */}
-          <div className="doctor-kpi-card" onClick={() => navigate("/appointments")}>
-            <div className="kpi-card-top">
-              <div className="kpi-icon-wrapper icon-amber">
-                <FaUserMd />
-              </div>
-              <span className="kpi-trend-badge trend-up">Network Active</span>
-            </div>
-            <div>
-              <div className="kpi-value">{metrics.doctors}</div>
-              <div className="kpi-title">Medical Staff &amp; Specialists</div>
-            </div>
-            <div className="kpi-subtext">HealthRay Clinic Doctors →</div>
-          </div>
-        </div>
-
         {/* ── 4. OPD SCHEDULE & QUICK CLINICAL TOOLS (NEXOPD STYLE) ── */}
         <div className="doctor-section-grid">
           {/* Left Panel: Today's Patient Schedule */}
@@ -1440,76 +1377,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── 5. RECENT PATIENT RECORDS & CLINICAL ANALYSIS SHOWCASE ── */}
-        <div className="doctor-card-panel" style={{ marginBottom: "36px" }}>
-          <div className="panel-header">
-            <div className="panel-title">
-              <FaUserInjured className="panel-icon" />
-              <span>Recent Patient Records &amp; Clinical Analysis</span>
-            </div>
-            <Link to="/patients-details" className="panel-action-link">
-              Open Full Directory <BsArrowRight />
-            </Link>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "18px" }}>
-            {recentPatients && recentPatients.length > 0 ? (
-              recentPatients.slice(0, 3).map((pat) => (
-                <div key={pat.id} style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "18px",
-                  padding: "20px",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                  transition: "all 0.2s ease"
-                }}>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div className="patient-avatar-circle" style={{ width: "38px", height: "38px", fontSize: "14px" }}>
-                          {pat.name?.[0]?.toUpperCase() || "P"}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: "750", fontSize: "14.5px", color: "#0f172a" }}>{pat.name}</div>
-                          <div style={{ fontSize: "12px", color: "#64748b" }}>Age {pat.age} • {pat.gender}</div>
-                        </div>
-                      </div>
-                      <span style={{
-                        background: "#e0f2fe",
-                        color: "#0284c7",
-                        padding: "3px 10px",
-                        borderRadius: "12px",
-                        fontSize: "11.5px",
-                        fontWeight: "750"
-                      }}>
-                        {pat.bloodGroup || "O+"}
-                      </span>
-                    </div>
-
-                    <p style={{ fontSize: "12.5px", color: "#475569", lineHeight: "1.5", marginBottom: "16px", background: "#ffffff", padding: "10px 12px", borderRadius: "10px", border: "1px solid #f1f5f9" }}>
-                      {pat.medicalNotes ? `Note: "${pat.medicalNotes.slice(0, 70)}..."` : "No special medical notes recorded"}
-                    </p>
-                  </div>
-
-                  <button 
-                    className="action-btn-secondary"
-                    style={{ width: "100%", justifyContent: "center" }}
-                    onClick={() => navigate(`/patients-details?patientId=${pat.id}`)}
-                  >
-                    <BsActivity />
-                    <span>Analyze Case &amp; Notes</span>
-                  </button>
-                </div>
-              ))
-            ) : (
-              <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "24px", color: "#64748b" }}>
-                <p>No patient records currently available</p>
-              </div>
-            )}
-          </div>
-        </div>
+       
 
         {/* ── 6. PRACTICE TRENDS & CLINICAL DISTRIBUTION (MATCHING USER IMAGE 2 EXACTLY) ── */}
         <div className="doctor-section-grid">

@@ -31,6 +31,7 @@ export default function Login() {
       setLoading(true);
       const res = await API.post("/auth/login", form);
       localStorage.setItem("user", JSON.stringify(res.data.user));
+      localStorage.setItem("token", res.data.token);
       setErrors({});
       toast.success("Login successful!");
       window.location.href = "/dashboard";
