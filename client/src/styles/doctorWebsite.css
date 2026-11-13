@@ -617,7 +617,12 @@
   gap: 12px;
   font-size: 19px;
   font-weight: 800;
-  color: #0f172a;
+  color: #0f172a !important;
+}
+
+.panel-title span,
+.panel-title h3 {
+  color: #0f172a !important;
 }
 
 .panel-icon {

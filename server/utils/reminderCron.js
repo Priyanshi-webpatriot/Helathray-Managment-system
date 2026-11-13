@@ -2,6 +2,11 @@ import cron from "node-cron";
 import prisma from "../prisma/client.js";
 import axios from "axios";
 import { sendEmail } from "./sendEmail.js";
+import {
+    getAppointmentDateTimes,
+    buildIcsCalendarEvent,
+    buildGoogleCalendarLink,
+} from "./calendarInvite.js";
 
 // Prevent overlapping executions
 let isProcessing = false;
@@ -125,6 +130,38 @@ export const processReminders = async () => {
                         // Dispatch email notification if patient email is present
                         const patientEmail = appointment.patient?.user?.email;
                         if (patientEmail) {
+                            // Generate Calendar Invite (.ics) and 1-Click Google Calendar Link (PATIENTS ONLY)
+                            const clinicName = appointment.doctor?.clinicName || "HealthRay Clinic";
+                            const clinicLocation = appointment.doctor?.address || appointment.doctor?.city || "Consultation Clinic";
+                            const fullLocation = `${clinicName}, ${clinicLocation}`;
+
+                            const { startDate, endDate } = getAppointmentDateTimes(
+                                appointment.date,
+                                time,
+                                30
+                            );
+
+                            const icsContent = buildIcsCalendarEvent({
+                                appointmentId: appointment.id,
+                                title: `Medical Consultation with Dr. ${doctorName.replace(/^Dr\.\s*/i, "")} (${specialty})`,
+                                description: `In-clinic doctor consultation.\nDoctor: Dr. ${doctorName.replace(/^Dr\.\s*/i, "")}\nSpecialty: ${specialty}\nClinic: ${fullLocation}\nTime: ${time}\nStatus: Confirmed.\nPlease arrive 10 minutes prior to scheduled time.`,
+                                location: fullLocation,
+                                startDate,
+                                endDate,
+                                organizerName: "HealthRay HMS",
+                                organizerEmail: process.env.EMAIL_USER,
+                                attendeeName: patientName,
+                                attendeeEmail: patientEmail,
+                            });
+
+                            const googleCalendarUrl = buildGoogleCalendarLink({
+                                title: `Doctor Appointment - Dr. ${doctorName.replace(/^Dr\.\s*/i, "")} (${specialty})`,
+                                description: `In-clinic doctor consultation scheduled via HealthRay HMS.\nDoctor: Dr. ${doctorName.replace(/^Dr\.\s*/i, "")}\nSpecialty: ${specialty}\nClinic: ${fullLocation}\nTime: ${time}`,
+                                location: fullLocation,
+                                startDate,
+                                endDate,
+                            });
+
                             const isSent = await sendEmail({
                                 to: patientEmail,
                                 subject: "Appointment Reminder - HealthRay HMS",
@@ -137,8 +174,12 @@ export const processReminders = async () => {
                                     "Specialty / Dept": specialty,
                                     "Appointment Date": appointmentDateStr,
                                     "Appointment Time": time,
+                                    "Clinic / Hospital": clinicName,
+                                    "Location": clinicLocation,
                                     "Status": "Confirmed",
                                 },
+                                googleCalendarUrl,
+                                icsContent,
                             });
 
                             if (isSent) {

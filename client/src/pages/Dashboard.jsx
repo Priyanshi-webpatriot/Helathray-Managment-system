@@ -1049,7 +1049,7 @@ export default function Dashboard() {
             <div className="panel-header">
               <div className="panel-title">
                 <FaChartLine className="panel-icon" />
-                <span>OPD Appointment Volume Trends</span>
+                <span style={{ fontWeight: "850", fontSize: "18px", color: "#0f172a" }}>OPD Appointment Volume Trends</span>
               </div>
               <div style={{ display: "flex", gap: "6px", background: "#f1f5f9", padding: "3px", borderRadius: "10px" }}>
                 <button 

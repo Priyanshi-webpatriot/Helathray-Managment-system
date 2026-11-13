@@ -49,6 +49,11 @@ export default function PatientDoctors() {
   const [selectedDates, setSelectedDates] = useState({});
   const [selectedTimes, setSelectedTimes] = useState({});
 
+  const [modalDoctor, setModalDoctor] = useState(null);
+  const [modalDate, setModalDate] = useState("");
+  const [modalTime, setModalTime] = useState("");
+  const [isSubmittingModal, setIsSubmittingModal] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState(searchParam);
   const [locationSearch, setLocationSearch] = useState(initialLocation);
   const [isNearMeActive, setIsNearMeActive] = useState(nearMeParam);
@@ -163,35 +168,35 @@ export default function PatientDoctors() {
   };
 
   // BOOK APPOINTMENT
-  const handleBook = async (doctorId) => {
+  const handleBook = async (doctorId, customDate, customTime) => {
     try {
       if (!user) {
         toast.warning("Please login first to book an appointment");
-        return;
+        return false;
       }
 
-      const selectedDate = selectedDates[doctorId];
-      const selectedTime = selectedTimes[doctorId];
+      const selectedDate = customDate || selectedDates[doctorId];
+      const selectedTime = customTime || selectedTimes[doctorId];
 
       if (!selectedDate) {
         toast.warning("Please select an appointment date");
-        return;
+        return false;
       }
 
       const todayStr = getTodayDateStr();
       if (selectedDate < todayStr) {
         toast.error("Cannot book for a past date. Please select today or a future date.");
-        return;
+        return false;
       }
 
       if (!selectedTime) {
         toast.warning("Please select an appointment time slot");
-        return;
+        return false;
       }
 
       if (selectedDate === todayStr && selectedTime <= getCurrentTimeStr()) {
         toast.error("Cannot book for a past time. Please select an upcoming time slot.");
-        return;
+        return false;
       }
 
       await API.post(
@@ -211,6 +216,9 @@ export default function PatientDoctors() {
 
       toast.success("Appointment booked successfully!");
 
+      setSelectedDates((prev) => ({ ...prev, [doctorId]: selectedDate }));
+      setSelectedTimes((prev) => ({ ...prev, [doctorId]: selectedTime }));
+
       setBookedDoctors((prev) => [
         ...prev,
         {
@@ -219,9 +227,29 @@ export default function PatientDoctors() {
           time: selectedTime,
         },
       ]);
+      return true;
     } catch (error) {
       console.log("Booking error:", error);
       toast.error(error.response?.data?.error || "Booking failed. Please try again.");
+      return false;
+    }
+  };
+
+  const openBookingModal = (doctor) => {
+    setModalDoctor(doctor);
+    const initialDate = selectedDates[doctor.id] || getTodayDateStr();
+    const initialTime = selectedTimes[doctor.id] || "10:30";
+    setModalDate(initialDate);
+    setModalTime(initialTime);
+  };
+
+  const handleModalConfirm = async () => {
+    if (!modalDoctor) return;
+    setIsSubmittingModal(true);
+    const success = await handleBook(modalDoctor.id, modalDate, modalTime);
+    setIsSubmittingModal(false);
+    if (success) {
+      setModalDoctor(null);
     }
   };
 
@@ -338,6 +366,39 @@ export default function PatientDoctors() {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
+  const makeGoogleCalendarUrl = (doc, bookedDate, bookedTime) => {
+    const title = `Doctor Appointment - Dr. ${doc.name} (${doc.specialty || "General Medicine"})`;
+    const location = `${doc.clinicName || "HealthRay Clinic"}, ${doc.address || doc.city || "Ahmedabad"}`;
+    const details = `Medical Consultation with Dr. ${doc.name}.\nSpecialty: ${doc.specialty || "General Medicine"}\nClinic: ${location}\nScheduled Time: ${bookedTime || "Scheduled Time"}`;
+
+    const dateStr = (bookedDate || "").split("T")[0];
+    const [year, month, day] = (dateStr || "2026-01-01").split("-").map(Number);
+
+    let hours = 10;
+    let minutes = 0;
+    if (bookedTime) {
+      const parts = bookedTime.split(":");
+      if (parts.length >= 2) {
+        hours = parseInt(parts[0], 10) || 10;
+        minutes = parseInt(parts[1], 10) || 0;
+      }
+    }
+
+    const start = new Date(year, month - 1, day, hours, minutes);
+    const end = new Date(start.getTime() + 30 * 60 * 1000);
+    const formatUtc = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+
+    const params = new URLSearchParams({
+      action: "TEMPLATE",
+      text: title,
+      dates: `${formatUtc(start)}/${formatUtc(end)}`,
+      details: details,
+      location: location,
+    });
+
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+  };
+
   // DISTANCE PROCESSING
   const currentDetectedCity = (userCity || "Ahmedabad").trim().toLowerCase();
 
@@ -440,29 +501,32 @@ export default function PatientDoctors() {
 
   return (
     <div className="pd-shell">
-      {/* ── TOP HEADER ── */}
+      {/* ── BREADCRUMB / BACK ── */}
+      <div className="pd-nav-bar">
+        <button
+          type="button"
+          className="pd-back-action-btn"
+          onClick={() => navigate(-1)}
+          title="Go back"
+        >
+          <FaArrowLeft />
+          <span>Back</span>
+        </button>
+      </div>
+
+      {/* ── HEADER BANNER ── */}
       <div className="pd-header-card">
-        <div className="pd-header-left-col">
-          <button
-            type="button"
-            className="pd-back-action-btn"
-            onClick={() => navigate(-1)}
-            title="Go back"
-          >
-            <FaArrowLeft />
-            <span>Back</span>
-          </button>
-          <div className="pd-title-group">
-            <span className="pd-eyebrow">Patient Portal · Doctor Consultations</span>
-            <h1 className="pd-main-title">Find &amp; Book Doctors</h1>
-            <p className="pd-sub-title">
-              Connect with leading specialists for clinic visits and expert healthcare.
-            </p>
-          </div>
+        <div className="pd-title-group">
+          <span className="pd-eyebrow">Patient Portal · Doctor Consultations</span>
+          <h1 className="pd-main-title">Find &amp; Book Doctors</h1>
+          <p className="pd-sub-title">
+            Connect with leading specialists for clinic visits and expert healthcare.
+          </p>
         </div>
 
         <div className="pd-header-right-col">
           <div className="pd-count-badge">
+            <span className="pd-count-dot" />
             <strong>{filteredDoctors.length}</strong>
             <span>Doctors Available</span>
           </div>
@@ -825,6 +889,18 @@ export default function PatientDoctors() {
                         </>
                       )}
                     </button>
+
+                    {isBooked && (
+                      <a
+                        href={makeGoogleCalendarUrl(d, selectedDate, selectedTime)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="pd-cal-link-btn"
+                        title="Add to Google Calendar for phone alerts"
+                      >
+                        <FaCalendarAlt /> Add to Google Calendar
+                      </a>
+                    )}
                   </div>
                 </div>
               );
@@ -843,7 +919,7 @@ export default function PatientDoctors() {
                   <th>Experience</th>
                   <th>Location &amp; Clinic</th>
                   <th>Contact</th>
-                  <th>Schedule Appointment</th>
+                  <th style={{ textAlign: "right", paddingRight: "24px" }}>Schedule Appointment</th>
                 </tr>
               </thead>
               <tbody>
@@ -865,7 +941,7 @@ export default function PatientDoctors() {
                       : "");
 
                   return (
-                    <tr key={d.id}>
+                    <tr key={d.id} className={isBooked ? "row-booked" : ""}>
                       <td>
                         <div className="pd-table-doc-cell">
                           <div
@@ -874,8 +950,11 @@ export default function PatientDoctors() {
                           >
                             {getDoctorInitials(d.name)}
                           </div>
-                          <div>
+                          <div className="pd-table-doc-meta">
                             <strong className="pd-table-doc-name">Dr. {d.name}</strong>
+                            <span className="pd-table-doc-sub">
+                              <span className="pulse-dot-tiny"></span> Verified Doctor
+                            </span>
                           </div>
                         </div>
                       </td>
@@ -892,60 +971,57 @@ export default function PatientDoctors() {
                         </span>
                       </td>
                       <td>
-                        <span className="pd-table-cell-bold">
-                          {d.experience ? `${d.experience} Years` : "—"}
-                        </span>
+                        <div className="pd-table-exp-pill">
+                          {d.experience ? `${d.experience} Years` : "3+ Years"}
+                        </div>
                       </td>
                       <td>
                         <div className="pd-table-loc-block">
-                          <span>{d.clinicName || "HealthRay Clinic"}</span>
+                          <strong className="pd-table-clinic-name">{d.clinicName || "HealthRay Clinic"}</strong>
                           <span className="pd-table-loc-sub">
+                            <FaMapMarkerAlt className="loc-pin-icon" />
                             {d.address || d.city || "Ahmedabad"}
                             {d.distanceKm !== null && d.distanceKm !== undefined
-                              ? ` · 📍 ${d.distanceKm} km`
+                              ? ` · ${d.distanceKm} km away`
                               : ""}
                           </span>
                         </div>
                       </td>
                       <td>
-                        <span className="pd-table-cell-muted">{d.mobile || "—"}</span>
+                        <div className="pd-table-contact-cell">
+                          <FaPhoneAlt className="contact-icon" />
+                          <span>{d.mobile || "—"}</span>
+                        </div>
                       </td>
                       <td>
-                        <div className="pd-table-booking-inline">
-                          <input
-                            type="date"
-                            className="pd-table-input"
-                            value={selectedDate}
-                            min={getTodayDateStr()}
-                            onChange={(e) =>
-                              setSelectedDates({ ...selectedDates, [d.id]: e.target.value })
-                            }
-                            disabled={isBooked}
-                          />
-
-                          <input
-                            type="time"
-                            className="pd-table-input"
-                            min={
-                              selectedDates[d.id] === getTodayDateStr()
-                                ? getCurrentTimeStr()
-                                : undefined
-                            }
-                            value={selectedTime}
-                            onChange={(e) =>
-                              setSelectedTimes({ ...selectedTimes, [d.id]: e.target.value })
-                            }
-                            disabled={isBooked}
-                          />
-
-                          <button
-                            type="button"
-                            className={`pd-table-book-btn ${isBooked ? "confirmed" : ""}`}
-                            onClick={() => handleBook(d.id)}
-                            disabled={isBooked}
-                          >
-                            {isBooked ? "✓ Confirmed" : "Book"}
-                          </button>
+                        <div className="pd-table-action-cell">
+                          {isBooked ? (
+                            <div className="pd-table-booked-group">
+                              <span className="pd-table-confirmed-tag">
+                                <FaCheckCircle /> Confirmed
+                              </span>
+                              <span className="pd-table-slot-text">
+                                {selectedDate} · {selectedTime}
+                              </span>
+                              <a
+                                href={makeGoogleCalendarUrl(d, selectedDate, selectedTime)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="pd-table-gcal-link"
+                                title="Add to Google Calendar"
+                              >
+                                <FaCalendarAlt /> Sync
+                              </a>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="pd-table-book-action-btn"
+                              onClick={() => openBookingModal(d)}
+                            >
+                              <FaCalendarCheck /> Book Appointment
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -953,6 +1029,109 @@ export default function PatientDoctors() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── APPOINTMENT BOOKING MODAL FOR TABLE VIEW ── */}
+      {modalDoctor && (
+        <div className="pd-modal-overlay" onClick={() => !isSubmittingModal && setModalDoctor(null)}>
+          <div className="pd-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="pd-modal-header">
+              <div className="pd-modal-title-wrap">
+                <span className="pd-modal-pill">CONFIRMED OPD VISIT</span>
+                <h3>Book Doctor Consultation</h3>
+              </div>
+              <button
+                type="button"
+                className="pd-modal-close-btn"
+                onClick={() => !isSubmittingModal && setModalDoctor(null)}
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Doctor summary */}
+            <div className="pd-modal-doc-summary">
+              <div
+                className="pd-modal-avatar"
+                style={{ backgroundColor: getSpecialtyColor(modalDoctor.specialty).avatar }}
+              >
+                {getDoctorInitials(modalDoctor.name)}
+              </div>
+              <div className="pd-modal-doc-info">
+                <h4>Dr. {modalDoctor.name}</h4>
+                <span className="pd-modal-spec">
+                  {modalDoctor.specialty || "General Medicine"}
+                </span>
+                <p className="pd-modal-clinic">
+                  <FaMapMarkerAlt /> {modalDoctor.clinicName || "HealthRay Clinic"}, {modalDoctor.city || "Ahmedabad"}
+                </p>
+              </div>
+            </div>
+
+            {/* Booking Form */}
+            <div className="pd-modal-form">
+              <div className="pd-modal-field">
+                <label>
+                  <FaCalendarAlt /> Appointment Date
+                </label>
+                <input
+                  type="date"
+                  className="pd-modal-input"
+                  min={getTodayDateStr()}
+                  value={modalDate}
+                  onChange={(e) => setModalDate(e.target.value)}
+                  disabled={isSubmittingModal}
+                />
+              </div>
+
+              <div className="pd-modal-field">
+                <label>
+                  <FaClock /> Consultation Time
+                </label>
+                <input
+                  type="time"
+                  className="pd-modal-input"
+                  min={
+                    modalDate === getTodayDateStr()
+                      ? getCurrentTimeStr()
+                      : undefined
+                  }
+                  value={modalTime}
+                  onChange={(e) => setModalTime(e.target.value)}
+                  disabled={isSubmittingModal}
+                />
+              </div>
+            </div>
+
+            <div className="pd-modal-guarantee-note">
+              <FaCheckCircle className="text-green" />
+              <span>Instant confirmed slot with automated reminders &amp; Google Calendar sync</span>
+            </div>
+
+            <div className="pd-modal-actions">
+              <button
+                type="button"
+                className="pd-modal-cancel-btn"
+                onClick={() => setModalDoctor(null)}
+                disabled={isSubmittingModal}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="pd-modal-confirm-btn"
+                onClick={handleModalConfirm}
+                disabled={isSubmittingModal}
+              >
+                {isSubmittingModal ? "Booking..." : (
+                  <>
+                    <FaCalendarCheck /> Confirm Appointment
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -26,6 +26,7 @@ export const buildHealthcareEmailTemplate = ({
     recipientName = "",
     role = "patient",
     details = null,
+    googleCalendarUrl = null,
 }) => {
     // Generate detail rows if details object is provided
     let detailsHtml = "";
@@ -120,6 +121,21 @@ export const buildHealthcareEmailTemplate = ({
 
                             <!-- Structured Details Table -->
                             ${detailsHtml}
+
+                            <!-- 1-Click Google Calendar Action (PATIENTS ONLY) -->
+                            ${role === "patient" && googleCalendarUrl ? `
+                            <div style="margin: 24px 0 10px 0; padding: 20px; background: #f8fafc; border: 1.5px dashed #bae6fd; border-radius: 12px; text-align: center;">
+                                <div style="font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 6px;">
+                                    📅 Set Google Calendar Reminder
+                                </div>
+                                <div style="font-size: 12.5px; color: #64748b; margin-bottom: 14px; line-height: 1.5;">
+                                    Add this consultation to your Google Calendar to receive automatic phone notifications before your visit.
+                                </div>
+                                <a href="${googleCalendarUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff !important; text-decoration: none; font-size: 13.5px; font-weight: 700; padding: 11px 22px; border-radius: 9px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);">
+                                    Add to Google Calendar
+                                </a>
+                            </div>
+                            ` : ""}
                         </td>
                     </tr>
                 </table>
@@ -153,6 +169,8 @@ export const sendEmail = async ({
     recipientName = "",
     role = "patient",
     details = null,
+    googleCalendarUrl = null,
+    icsContent = null,
 }) => {
     if (!to) {
         console.log("Email notification skipped: recipient email address is missing.");
@@ -169,6 +187,7 @@ export const sendEmail = async ({
             recipientName,
             role,
             details,
+            googleCalendarUrl,
         });
 
         const mailOptions = {
@@ -178,6 +197,22 @@ export const sendEmail = async ({
             text,
             html: finalHtml,
         };
+
+        // Attach iCalendar (.ics) invite ONLY for patient emails
+        if (role === "patient" && icsContent) {
+            mailOptions.icalEvent = {
+                filename: "appointment.ics",
+                method: "REQUEST",
+                content: icsContent,
+            };
+            mailOptions.attachments = [
+                {
+                    filename: "appointment.ics",
+                    content: icsContent,
+                    contentType: "text/calendar; charset=utf-8; method=REQUEST",
+                },
+            ];
+        }
 
         const info = await transporter.sendMail(mailOptions);
         console.log(`✉️ Email successfully sent to ${to} (MessageId: ${info.messageId})`);

@@ -202,7 +202,7 @@ export default function Layout() {
               <div className="doctor-brand-text">
                 <div className="doctor-brand-title">
                   <span className="brand-main-practo">HealthRay</span>
-                  <span className="brand-badge-doc">DOCTOR PRO</span>
+                  <span className="brand-badge-doc">DOCTOR</span>
                 </div>
                 <span className="brand-sub-practo">Clinical OPD &amp; Practice Management</span>
               </div>
@@ -210,14 +210,6 @@ export default function Layout() {
 
             {/* Doctor Navigation Menu */}
             <nav className="doctor-nav-menu">
-              <NavLink 
-                to="/dashboard" 
-                className={({ isActive }) => isActive ? "doctor-nav-link active" : "doctor-nav-link"}
-              >
-                <BsActivity className="nav-icon" />
-                <span>Practice Home</span>
-              </NavLink>
-
               <NavLink 
                 to="/appointments" 
                 className={({ isActive }) => isActive ? "doctor-nav-link active" : "doctor-nav-link"}
