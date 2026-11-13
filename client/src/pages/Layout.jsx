@@ -1,116 +1,20 @@
-import { useState, useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import "../styles/layout.css";
 import "../styles/patientWebsite.css";
 import "../styles/doctorWebsite.css";
 import { BsHospital, BsCalendar2Check, BsPeople, BsActivity, BsShieldLock, BsFileEarmarkMedical, BsCheckCircleFill } from "react-icons/bs";
-import { FaUserMd, FaUserInjured, FaSignOutAlt, FaBell, FaPhoneAlt, FaMapMarkerAlt, FaLock, FaShieldAlt, FaStethoscope } from "react-icons/fa";
-import API from "../api";
+import { FaUserMd, FaUserInjured, FaSignOutAlt, FaPhoneAlt, FaMapMarkerAlt, FaLock, FaShieldAlt, FaStethoscope } from "react-icons/fa";
 import ChatBox from "../components/ChatBox";
 
 export default function Layout() {
   const user = JSON.parse(localStorage.getItem("user"));
   const navigate = useNavigate();
-  const [remindersOpen, setRemindersOpen] = useState(false);
-  const [reminders, setReminders] = useState([]);
-  const [seenReminderIds, setSeenReminderIds] = useState(() => {
-    try {
-      const stored = localStorage.getItem(`seenReminders_${user?.id}`);
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-
-  useEffect(() => {
-    if (!user || (user.role !== "patient" && user.role !== "doctor")) return;
-
-    const fetchReminders = async () => {
-      try {
-        const endpoint = user.role === "patient" ? "/reminders/patient-reminders" : "/reminders/doctor-reminders";
-        const res = await API.get(endpoint);
-        if (Array.isArray(res.data)) {
-          setReminders(res.data);
-        } else {
-          setReminders([]);
-        }
-      } catch (error) {
-        console.error("Failed to fetch reminders in layout:", error);
-        setReminders([]);
-      }
-    };
-
-    fetchReminders();
-    const interval = setInterval(fetchReminders, 15000);
-    return () => clearInterval(interval);
-  }, []);
-
 
   const logout = () => {
     localStorage.removeItem("user");
     localStorage.removeItem("token");
     navigate("/");
   };
-
-  // Reusable reminder alerts component
-  const renderReminderBell = (isWebsite = false) => (
-    <div 
-      className={isWebsite ? "patient-web-bell" : "notification-bell"}
-      title="Alerts"
-      onClick={() => {
-        const newOpen = !remindersOpen;
-        setRemindersOpen(newOpen);
-        if (newOpen && reminders.length > 0) {
-          const allIds = reminders.map((r) => r.id);
-          const updatedSeen = new Set([...seenReminderIds, ...allIds]);
-          setSeenReminderIds(updatedSeen);
-          localStorage.setItem(
-            `seenReminders_${user?.id}`,
-            JSON.stringify([...updatedSeen])
-          );
-        }
-      }}
-    >
-      <FaBell />
-      {reminders.filter((r) => !seenReminderIds.has(r.id)).length > 0 && (
-        <span className="notification-badge">
-          {reminders.filter((r) => !seenReminderIds.has(r.id)).length}
-        </span>
-      )}
-      
-      {remindersOpen && (
-        <div className="layout-reminders-dropdown" onClick={(e) => e.stopPropagation()}>
-          <div className="dropdown-header">
-            <h3>Reminders</h3>
-            {reminders.filter((r) => !seenReminderIds.has(r.id)).length > 0 && (
-              <span className="count-badge">
-                {reminders.filter((r) => !seenReminderIds.has(r.id)).length} New
-              </span>
-            )}
-          </div>
-          <div className="dropdown-body">
-            {reminders.length === 0 ? (
-              <div className="no-reminders">No new reminders</div>
-            ) : (
-              reminders.map((rem) => (
-                <div key={rem.id} className="dropdown-item">
-                  <div className="item-icon"><FaBell size={13} /></div>
-                  <div className="item-content">
-                    <p className="item-message">{rem.message}</p>
-                    <span className="item-meta">
-                      {user.role === "patient" 
-                        ? `Doctor: ${rem.appointment?.doctor?.name || "N/A"}`
-                        : `Patient: ${rem.appointment?.patient?.name || "N/A"}`}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
 
   // ─────────────────────────────────────────────────────────────
   // 1. PATIENT VIEW: PRACTO-STYLE CONSUMER HEALTHCARE WEBSITE
@@ -173,8 +77,6 @@ export default function Layout() {
 
             {/* 3. Right: Header User Controls */}
             <div className="practo-nav-actions">
-              {renderReminderBell(true)}
-
               <div 
                 className="practo-user-pill" 
                 onClick={() => navigate("/patient-profile")}
@@ -191,6 +93,11 @@ export default function Layout() {
                   </span>
                 </div>
               </div>
+
+              <button className="doctor-logout-btn" onClick={logout} title="Log Out of Portal">
+                <FaSignOutAlt />
+                <span>Log out</span>
+              </button>
             </div>
           </div>
         </header>
@@ -328,10 +235,8 @@ export default function Layout() {
               </NavLink>
             </nav>
 
-            {/* Right Actions: Reminders Bell, Doctor Profile Pill & Sign Out */}
+            {/* Right Actions: Doctor Profile Pill & Sign Out */}
             <div className="doctor-nav-actions">
-              {renderReminderBell(true)}
-
               <div 
                 className="doctor-user-pill" 
                 onClick={() => navigate("/doctor-profile")}
@@ -533,72 +438,10 @@ export default function Layout() {
           </div>
 
           <div className="topbar-actions">
-              {(user?.role === "patient" || user?.role === "doctor") && (
-              <div 
-                className="notification-bell" 
-                title="Alerts"
-                onClick={() => {
-                  const newOpen = !remindersOpen;
-                  setRemindersOpen(newOpen);
-                  if (newOpen && reminders.length > 0) {
-                    // Mark all current reminders as seen
-                    const allIds = reminders.map((r) => r.id);
-                    const updatedSeen = new Set([...seenReminderIds, ...allIds]);
-                    setSeenReminderIds(updatedSeen);
-                    localStorage.setItem(
-                      `seenReminders_${user?.id}`,
-                      JSON.stringify([...updatedSeen])
-                    );
-                  }
-                }}
-              >
-                <FaBell />
-                {reminders.filter((r) => !seenReminderIds.has(r.id)).length > 0 && (
-                  <span className="notification-badge">
-                    {reminders.filter((r) => !seenReminderIds.has(r.id)).length}
-                  </span>
-                )}
-                
-                {remindersOpen && (
-                  <div className="layout-reminders-dropdown" onClick={(e) => e.stopPropagation()}>
-                    <div className="dropdown-header">
-                      <h3>Reminders</h3>
-                      {reminders.filter((r) => !seenReminderIds.has(r.id)).length > 0 && (
-                        <span className="count-badge">
-                          {reminders.filter((r) => !seenReminderIds.has(r.id)).length} New
-                        </span>
-                      )}
-                    </div>
-                    <div className="dropdown-body">
-                      {reminders.length === 0 ? (
-                        <div className="no-reminders">No new reminders</div>
-                      ) : (
-                        reminders.map((rem) => (
-                          <div key={rem.id} className="dropdown-item">
-                            <div className="item-icon"><FaBell size={13} /></div>
-                            <div className="item-content">
-                              <p className="item-message">{rem.message}</p>
-                              <span className="item-meta">
-                                {user.role === "patient" 
-                                  ? `Doctor: ${rem.appointment?.doctor?.name || "N/A"}`
-                                  : `Patient: ${rem.appointment?.patient?.name || "N/A"}`}
-                              </span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
             <button className="topbar-logout-btn" onClick={logout}>
               <FaSignOutAlt />
               <span>Log out</span>
             </button>
-
-           
           </div>
         </header>
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import API from "../api";
 import "../styles/chatbox.css";
 import ReactMarkdown from "react-markdown";
-import { FaFilePdf } from "react-icons/fa";
+import { FaFilePdf, FaTimes } from "react-icons/fa";
 import { FaUserDoctor } from "react-icons/fa6";
 import { toast } from "react-toastify";
 
@@ -281,6 +281,11 @@ Avoid mentioning missing information.
   // =========================
 
   useEffect(() => {
+    if (!patient?.id) {
+      setChat([]);
+      setIsOpen(false);
+      return;
+    }
     fetchDoctorChats();
   }, [patient?.id]);
 
@@ -290,7 +295,13 @@ Avoid mentioning missing information.
 
       <div
         className="chat-icon"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          if (!patient?.id) {
+            toast.info("Please select a patient using Analyze first");
+            return;
+          }
+          setIsOpen(!isOpen);
+        }}
       >
           <FaUserDoctor />
       </div>
@@ -302,8 +313,28 @@ Avoid mentioning missing information.
 
           {/* HEADER */}
 
-          <div className="doctor-ai-header">
-            Doctor AI Assistant
+          <div className="doctor-ai-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>Doctor AI Assistant</span>
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              title="Close AI Assistant"
+              style={{
+                background: "rgba(255,255,255,0.2)",
+                border: "none",
+                color: "#ffffff",
+                width: "26px",
+                height: "26px",
+                borderRadius: "50%",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                fontSize: "13px",
+              }}
+            >
+              <FaTimes />
+            </button>
           </div>
 
           {/* ACTION BUTTONS */}

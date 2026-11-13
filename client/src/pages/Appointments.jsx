@@ -2,8 +2,12 @@ import { useEffect, useState } from "react";
 import API from "../api";
 import "../styles/appointment.css";
 import { useNavigate } from "react-router-dom";
-import { BsCalendar2Check, BsCalendarCheck, BsClock, BsInbox } from "react-icons/bs";
-import { FaArrowLeft, FaChevronLeft, FaChevronRight, FaUserMd, FaUserInjured } from "react-icons/fa";
+import {
+  BsCalendar2Check, BsCalendarCheck, BsClock, BsInbox,
+} from "react-icons/bs";
+import {
+  FaArrowLeft, FaChevronLeft, FaChevronRight, FaUserMd, FaUserInjured,
+} from "react-icons/fa";
 import { toast } from "react-toastify";
 
 export default function Appointments() {
@@ -19,9 +23,7 @@ export default function Appointments() {
   const [errors, setErrors] = useState({});
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
-
   const [appointments, setAppointments] = useState([]);
-
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const limit = 5;
@@ -36,21 +38,14 @@ export default function Appointments() {
   const fetchPatients = async () => {
     try {
       if (!user) return;
-
       if (user.role === "patient") {
         const res = await API.get("/patients/profile", {
-          headers: {
-            role: user.role,
-            userid: user.id,
-          },
+          headers: { role: user.role, userid: user.id },
         });
         setForm((prev) => ({ ...prev, patientId: res.data.id }));
       } else {
         const res = await API.get("/patients", {
-          headers: {
-            role: user.role,
-            userid: user.id,
-          },
+          headers: { role: user.role, userid: user.id },
         });
         setPatients(res.data);
       }
@@ -67,20 +62,11 @@ export default function Appointments() {
   const fetchAppointments = async () => {
     try {
       if (!user) return;
-
-      const res = await API.get(
-        `/appointments?page=${page}&limit=${limit}`,
-        {
-          headers: {
-            role: user.role,
-            userid: user.id,
-          },
-        }
-      );
-
+      const res = await API.get(`/appointments?page=${page}&limit=${limit}`, {
+        headers: { role: user.role, userid: user.id },
+      });
       setAppointments(res.data.data);
       setTotalPages(res.data.totalPages);
-
     } catch (error) {
       console.log(error);
     }
@@ -92,17 +78,38 @@ export default function Appointments() {
   }, []);
 
   useEffect(() => {
-    fetchAppointments(); // refetch when page changes
+    fetchAppointments();
   }, [page]);
+
+  const getTodayDateStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const getCurrentTimeStr = () => {
+    const d = new Date();
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  };
 
   const validate = () => {
     let newErrors = {};
-
     if (!form.patientId) newErrors.patientId = "Patient is required";
     if (!form.doctorId) newErrors.doctorId = "Doctor is required";
-    if (!form.date) newErrors.date = "Date is required";
-    if (!form.time) newErrors.time = "Time is required";
-
+    if (!form.date) {
+      newErrors.date = "Date is required";
+    } else if (form.date < getTodayDateStr()) {
+      newErrors.date = "Cannot select a past date";
+    }
+    if (!form.time) {
+      newErrors.time = "Time is required";
+    } else if (form.date === getTodayDateStr() && form.time <= getCurrentTimeStr()) {
+      newErrors.time = "Cannot select a past time for today";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -110,16 +117,13 @@ export default function Appointments() {
   const handleCreate = async () => {
     try {
       if (!validate()) return;
-
       if (!user) {
         toast.warning("Please login first");
         return;
       }
-
       await API.post("/appointments", form, {
         headers: { role: user.role },
       });
-
       toast.success("Appointment booked successfully!");
       fetchAppointments();
       setForm({
@@ -136,175 +140,252 @@ export default function Appointments() {
   };
 
   return (
-    <div className="appointment-page">
-      {/* Header */}
-      <div className="header">
-        <div className="header-title-group">
-          <button className="back-btn" onClick={() => navigate(-1)} title="Go back">
+    <div className="appt-page">
+
+      {/* ── PAGE HEADER ── */}
+      <div className="appt-page-header">
+        <div className="appt-header-left">
+          <button className="appt-back-btn" onClick={() => navigate(-1)} title="Go back">
             <FaArrowLeft />
             <span>Back</span>
           </button>
-          <h2>
-            <BsCalendar2Check className="header-icon" />
-            <span>Appointment Management</span>
-          </h2>
+          <div className="appt-title-block">
+            <span className="appt-eyebrow">Doctor Portal</span>
+            <h1 className="appt-page-title">Appointment Management</h1>
+          </div>
         </div>
-        <span className="header-badge">Page {page} of {totalPages || 1}</span>
+        <span className="appt-page-badge">
+          Page {page} of {totalPages || 1}
+        </span>
       </div>
 
-      {/* Booking Form Panel */}
-      <div className="form">
-        {user?.role !== "patient" && (
-          <div className="form-group">
-            <label className="form-label">
-              <FaUserInjured className="label-icon" /> Select Patient
+      {/* ── BOOKING FORM CARD ── */}
+      <div className="appt-form-card">
+        <div className="appt-form-card-header">
+          <div className="appt-form-icon">
+            <BsCalendar2Check />
+          </div>
+          <div>
+            <h2 className="appt-form-card-title">Book New Appointment</h2>
+            <p className="appt-form-card-sub">Fill in the details below to schedule a consultation</p>
+          </div>
+        </div>
+
+        <div className="appt-form-grid">
+          {/* Patient select (non-patient roles only) */}
+          {user?.role !== "patient" && (
+            <div className="appt-form-group">
+              <label className="appt-form-label">
+                <FaUserInjured /> Select Patient
+              </label>
+              <select
+                className="appt-form-select"
+                value={form.patientId}
+                onChange={(e) => {
+                  setForm({ ...form, patientId: e.target.value });
+                  setErrors({ ...errors, patientId: "" });
+                }}
+              >
+                <option value="">Choose a patient...</option>
+                {patients.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              {errors.patientId && (
+                <span className="appt-field-error">⚠ {errors.patientId}</span>
+              )}
+            </div>
+          )}
+
+          {/* Doctor select */}
+          <div className="appt-form-group">
+            <label className="appt-form-label">
+              <FaUserMd /> Attending Doctor
             </label>
             <select
-              value={form.patientId}
+              className="appt-form-select"
+              value={form.doctorId}
               onChange={(e) => {
-                setForm({ ...form, patientId: e.target.value });
-                setErrors({ ...errors, patientId: "" });
+                setForm({ ...form, doctorId: e.target.value });
+                setErrors({ ...errors, doctorId: "" });
               }}
             >
-              <option value="">Select Patient</option>
-              {patients.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
+              <option value="">Choose a doctor...</option>
+              {doctors.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} — {d.specialty}
                 </option>
               ))}
             </select>
-            {errors.patientId && <span className="error">{errors.patientId}</span>}
+            {errors.doctorId && (
+              <span className="appt-field-error">⚠ {errors.doctorId}</span>
+            )}
           </div>
-        )}
 
-        <div className="form-group">
-          <label className="form-label">
-            <FaUserMd className="label-icon" /> Attending Doctor
-          </label>
-          <select
-            value={form.doctorId}
-            onChange={(e) => {
-              setForm({ ...form, doctorId: e.target.value });
-              setErrors({ ...errors, doctorId: "" });
-            }}
-          >
-            <option value="">Select Doctor</option>
-            {doctors.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name} ({d.specialty})
-              </option>
-            ))}
-          </select>
-          {errors.doctorId && <span className="error">{errors.doctorId}</span>}
+          {/* Date */}
+          <div className="appt-form-group">
+            <label className="appt-form-label">
+              <BsCalendarCheck /> Consultation Date
+            </label>
+            <input
+              type="date"
+              className="appt-form-input"
+              min={getTodayDateStr()}
+              value={form.date}
+              onChange={(e) => {
+                setForm({ ...form, date: e.target.value });
+                setErrors({ ...errors, date: "" });
+              }}
+            />
+            {errors.date && (
+              <span className="appt-field-error">⚠ {errors.date}</span>
+            )}
+          </div>
+
+          {/* Time */}
+          <div className="appt-form-group">
+            <label className="appt-form-label">
+              <BsClock /> Time Slot
+            </label>
+            <input
+              type="time"
+              className="appt-form-input"
+              min={form.date === getTodayDateStr() ? getCurrentTimeStr() : undefined}
+              value={form.time}
+              onChange={(e) => {
+                setForm({ ...form, time: e.target.value });
+                setErrors({ ...errors, time: "" });
+              }}
+            />
+            {errors.time && (
+              <span className="appt-field-error">⚠ {errors.time}</span>
+            )}
+          </div>
         </div>
 
-        <div className="form-group">
-          <label className="form-label">
-            <BsCalendarCheck className="label-icon" /> Consultation Date
-          </label>
-          <input
-            type="date"
-            value={form.date}
-            onChange={(e) => {
-              setForm({ ...form, date: e.target.value });
-              setErrors({ ...errors, date: "" });
-            }}
-          />
-          {errors.date && <span className="error">{errors.date}</span>}
+        <div className="appt-form-footer">
+          <button className="appt-book-btn" onClick={handleCreate}>
+            <BsCalendarCheck />
+            <span>Book Appointment</span>
+          </button>
         </div>
-
-        <div className="form-group">
-          <label className="form-label">
-            <BsClock className="label-icon" /> Time Slot
-          </label>
-          <input
-            type="time"
-            value={form.time}
-            onChange={(e) => {
-              setForm({ ...form, time: e.target.value });
-              setErrors({ ...errors, time: "" });
-            }}
-          />
-          {errors.time && <span className="error">{errors.time}</span>}
-        </div>
-
-        <button className="book-btn" onClick={handleCreate}>
-          <BsCalendarCheck />
-          <span>Book Appointment</span>
-        </button>
       </div>
 
-      {/* Table */}
-      <div className="table-wrapper">
+      {/* ── APPOINTMENTS LIST ── */}
+      <div className="appt-list-card">
+        <div className="appt-list-header">
+          <h3 className="appt-list-title">
+            <BsCalendar2Check />
+            Scheduled Appointments
+          </h3>
+          <span className="appt-list-count">{appointments.length} shown</span>
+        </div>
+
         {appointments.length === 0 ? (
-          <div className="empty">
-            <BsInbox size={28} style={{ marginBottom: "8px", opacity: 0.5 }} />
-            <p>No appointments recorded for this criteria</p>
+          <div className="appt-empty">
+            <BsInbox className="appt-empty-icon" />
+            <h4 className="appt-empty-title">No appointments found</h4>
+            <p className="appt-empty-desc">Use the form above to schedule a new consultation.</p>
           </div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                {user?.role !== "patient" && <th>Patient</th>}
-                {user?.role !== "patient" && <th>Contact Email</th>}
-                <th>Attending Doctor</th>
-                <th>Scheduled Date</th>
-                <th>Time Slot</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {appointments.map((a) => (
-                <tr key={a.id}>
-                  {user?.role !== "patient" && (
-                    <td>
-                      <div className="table-cell-bold">{a.patient?.name || "N/A"}</div>
-                    </td>
-                  )}
-                  {user?.role !== "patient" && (
-                    <td>
-                      <span className="table-cell-muted">{a.patient?.user?.email || "—"}</span>
-                    </td>
-                  )}
-                  <td>
-                    <div className="table-cell-bold">{a.doctor?.name}</div>
-                    <span className="doctor-specialty-chip">{a.doctor?.specialty}</span>
-                  </td>
-                  <td>{new Date(a.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
-                  <td>{a.time || "—"}</td>
-                  <td>
-                    <span className="status status-scheduled">
-                      <span className="status-dot"></span>
-                      Scheduled
-                    </span>
-                  </td>
+          <div className="appt-table-wrap">
+            <table className="appt-table">
+              <thead>
+                <tr>
+                  {user?.role !== "patient" && <th>Patient</th>}
+                  {user?.role !== "patient" && <th>Contact Email</th>}
+                  <th>Attending Doctor</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {appointments.map((a) => (
+                  <tr key={a.id}>
+                    {user?.role !== "patient" && (
+                      <td>
+                        <div className="appt-patient-row">
+                          <div className="appt-patient-avatar">
+                            {a.patient?.name?.[0]?.toUpperCase() || "P"}
+                          </div>
+                          <div>
+                            <div className="appt-cell-primary">{a.patient?.name || "N/A"}</div>
+                          </div>
+                        </div>
+                      </td>
+                    )}
+                    {user?.role !== "patient" && (
+                      <td>
+                        <span className="appt-cell-muted">{a.patient?.user?.email || "—"}</span>
+                      </td>
+                    )}
+                    <td>
+                      <div className="appt-doctor-row">
+                        <div className="appt-doctor-avatar">
+                          {a.doctor?.name?.[0]?.toUpperCase() || "D"}
+                        </div>
+                        <div>
+                          <div className="appt-cell-primary">{a.doctor?.name}</div>
+                          <div>
+                            <span className="appt-spec-chip">{a.doctor?.specialty}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="appt-date-cell">
+                        <BsCalendarCheck />
+                        {new Date(a.date).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="appt-date-cell">
+                        <BsClock />
+                        {a.time || "—"}
+                      </div>
+                    </td>
+                    <td>
+                      <span className="appt-status-badge">
+                        <span className="appt-status-dot" />
+                        Scheduled
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
+
+        {/* Pagination */}
+        <div className="appt-pagination">
+          <button
+            className="appt-page-btn"
+            disabled={page === 1}
+            onClick={() => setPage(page - 1)}
+          >
+            <FaChevronLeft /> Prev
+          </button>
+
+          <span className="appt-page-info">
+            Page {page} of {totalPages || 1}
+          </span>
+
+          <button
+            className="appt-page-btn"
+            disabled={page === totalPages || totalPages === 0}
+            onClick={() => setPage(page + 1)}
+          >
+            Next <FaChevronRight />
+          </button>
+        </div>
       </div>
 
-      {/* Pagination Controls */}
-      <div className="pagination">
-        <button
-          disabled={page === 1}
-          onClick={() => setPage(page - 1)}
-        >
-          <FaChevronLeft />
-          <span>Prev</span>
-        </button>
-
-        <span className="pagination-page-indicator">Page {page} of {totalPages || 1}</span>
-
-        <button
-          disabled={page === totalPages || totalPages === 0}
-          onClick={() => setPage(page + 1)}
-        >
-          <span>Next</span>
-          <FaChevronRight />
-        </button>
-      </div>
     </div>
   );
 }

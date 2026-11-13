@@ -6,7 +6,6 @@ import {
   FaUserMd,
   FaEdit,
   FaSave,
-  FaSignOutAlt,
   FaHospital,
   FaMapMarkerAlt,
   FaClock,
@@ -112,12 +111,6 @@ export default function DoctorProfile() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("user");
-    toast.info("Logged out successfully");
-    navigate("/");
   };
 
   if (loading) {
@@ -246,27 +239,6 @@ export default function DoctorProfile() {
               </button>
             </>
           )}
-
-          <button
-            type="button"
-            onClick={handleLogout}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              background: "#ef4444",
-              color: "#ffffff",
-              border: "none",
-              padding: "11px 20px",
-              borderRadius: "12px",
-              fontSize: "13.5px",
-              fontWeight: "800",
-              cursor: "pointer",
-              boxShadow: "0 4px 14px rgba(239, 68, 68, 0.3)"
-            }}
-          >
-            <FaSignOutAlt /> Log Out
-          </button>
         </div>
       </div>
 

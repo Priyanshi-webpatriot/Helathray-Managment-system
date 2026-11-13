@@ -6,7 +6,7 @@ import "../styles/consultation.css";
 import DoctorChatBox from "../components/DoctorChatBox.jsx";
 import ConsultationNote from "../components/ConsultationNote.jsx";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FaArrowLeft, FaChevronLeft, FaChevronRight, FaUserInjured } from "react-icons/fa";
+import { FaArrowLeft, FaChevronLeft, FaChevronRight, FaTimes, FaUserInjured } from "react-icons/fa";
 import { BsActivity, BsInbox } from "react-icons/bs";
 import { HiOutlineSparkles } from "react-icons/hi";
 
@@ -140,13 +140,39 @@ export default function PatientsDetails() {
                       <span className="table-cell-muted">{p.user?.email || "—"}</span>
                     </td>
                     <td>
-                      <button
-                        className={`analyze-btn ${isSelected ? "active" : ""}`}
-                        onClick={() => setSelectedPatient(p)}
-                      >
-                        <HiOutlineSparkles />
-                        <span>{isSelected ? "Analyzing" : "Analyze"}</span>
-                      </button>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <button
+                          className={`analyze-btn ${isSelected ? "active" : ""}`}
+                          onClick={() => setSelectedPatient(p)}
+                        >
+                          <HiOutlineSparkles />
+                          <span>{isSelected ? "Analyzing" : "Analyze"}</span>
+                        </button>
+                        {isSelected && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPatient(null)}
+                            title="Close patient analysis"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              padding: "7px 12px",
+                              borderRadius: "8px",
+                              border: "1px solid #fecaca",
+                              background: "#fef2f2",
+                              color: "#dc2626",
+                              fontSize: "12.5px",
+                              fontWeight: "700",
+                              cursor: "pointer",
+                              transition: "all 0.2s ease",
+                            }}
+                          >
+                            <FaTimes />
+                            <span>Close</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

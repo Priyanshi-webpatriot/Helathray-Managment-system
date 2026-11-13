@@ -1,57 +1,118 @@
-import { useState, useEffect, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import API from "../api";
 import "./patientNote.css";
 import {
-  FaClipboardList, FaCheckCircle, FaArrowRight, FaPills,
-  FaCalendarAlt, FaSearch, FaPrint, FaTimes, FaStethoscope,
-  FaFileMedical, FaUserMd
-} from "react-icons/fa";
-import { MdLocalHospital, MdOutlineVerified } from "react-icons/md";
-import { BsShieldCheck } from "react-icons/bs";
+  FiFileText,
+  FiSearch,
+  FiCalendar,
+  FiChevronLeft,
+  FiX,
+  FiCheckCircle,
+  FiAlertCircle,
+} from "react-icons/fi";
+import { FaUserMd, FaPills } from "react-icons/fa";
 
-// Helper: generate consistent accent color palette per specialty
 const getSpecialtyColor = (specialty = "") => {
   const s = specialty.toLowerCase();
-  if (s.includes("cardio")) return { bg: "#fff1f2", text: "#e11d48", border: "#fecdd3", gradient: "linear-gradient(135deg, #e11d48, #be123c)" };
-  if (s.includes("neuro")) return { bg: "#f5f3ff", text: "#7c3aed", border: "#ddd6fe", gradient: "linear-gradient(135deg, #7c3aed, #6d28d9)" };
-  if (s.includes("pedia")) return { bg: "#fffbeb", text: "#d97706", border: "#fde68a", gradient: "linear-gradient(135deg, #f59e0b, #d97706)" };
-  if (s.includes("ortho")) return { bg: "#f0fdf4", text: "#16a34a", border: "#bbf7d0", gradient: "linear-gradient(135deg, #10b981, #059669)" };
-  if (s.includes("derma")) return { bg: "#fdf2f8", text: "#db2777", border: "#fbcfe8", gradient: "linear-gradient(135deg, #ec4899, #be185d)" };
-  return { bg: "#eff6ff", text: "#2563eb", border: "#bfdbfe", gradient: "linear-gradient(135deg, #0ea5e9, #2563eb)" };
+  if (s.includes("cardio")) return { bg: "#fef2f2", text: "#dc2626", border: "#fecaca", avatar: "#ef4444" };
+  if (s.includes("neuro")) return { bg: "#f5f3ff", text: "#7c3aed", border: "#ddd6fe", avatar: "#8b5cf6" };
+  if (s.includes("ortho")) return { bg: "#fff7ed", text: "#ea580c", border: "#fed7aa", avatar: "#f97316" };
+  if (s.includes("derm")) return { bg: "#fdf2f8", text: "#db2777", border: "#fbcfe8", avatar: "#ec4899" };
+  if (s.includes("pedia")) return { bg: "#ecfeff", text: "#0891b2", border: "#a5f3fc", avatar: "#06b6d4" };
+  return { bg: "#eff6ff", text: "#0284c7", border: "#bae6fd", avatar: "#0284c7" };
 };
 
-// Helper: extract clinical snippet and check for medicines
-const parseNotePreview = (rawText = "") => {
-  if (!rawText) return { snippet: "Consultation summary recorded by doctor.", hasMeds: false };
-  const lines = rawText.split("\n").map(l => l.trim()).filter(Boolean);
-  
-  // Find first substantive line that is not just "From: Dr..."
-  let snippet = "";
-  for (const line of lines) {
-    const clean = line.replace(/^[•\-\*\d\.]+\s*/, "");
-    if (!clean.toLowerCase().startsWith("from") && clean.length > 15) {
-      snippet = clean;
-      break;
-    }
-  }
-  if (!snippet && lines.length > 0) snippet = lines[0];
-  if (snippet.length > 130) snippet = snippet.slice(0, 130) + "...";
+const getDoctorInitials = (name = "") => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "DR";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
 
-  const hasMeds = /tablet|capsule|syrup|drop|mg|dose|medicine|prescri|antibiotic/i.test(rawText);
-  return { snippet: snippet || "Official clinical advice recorded.", hasMeds };
+const parseNotePreview = (rawText = "") => {
+  const lines = rawText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const contentLines = lines.filter((l) => !l.startsWith("From"));
+  const snippet = contentLines
+    .slice(0, 2)
+    .join(" ")
+    .replace(/^[-•*\d.)\s]+/, "");
+  const hasMeds = /medication|prescri|tablet|mg|dosage|capsule|syrup|rx/i.test(rawText);
+  return { snippet: snippet || "Consultation summary available.", hasMeds };
+};
+
+const renderFormattedLine = (line, idx) => {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+
+  if (/^From\b/i.test(trimmed)) {
+    return (
+      <div key={idx} className="pnw-note-from">
+        <FaUserMd />
+        <span>{trimmed}</span>
+      </div>
+    );
+  }
+
+  const numberedMatch = trimmed.match(/^(\d+)[.)]\s+(.*)$/);
+  if (numberedMatch) {
+    return (
+      <div key={idx} className="pnw-note-step">
+        <span className="pnw-step-num">{numberedMatch[1]}</span>
+        <span>{numberedMatch[2]}</span>
+      </div>
+    );
+  }
+
+  if (/^[-•*]\s+/.test(trimmed)) {
+    return (
+      <div key={idx} className="pnw-note-bullet">
+        <span className="pnw-bullet-dot" />
+        <span>{trimmed.replace(/^[-•*]\s+/, "")}</span>
+      </div>
+    );
+  }
+
+  const isSectionHeading =
+    (trimmed.endsWith(":") && trimmed.length <= 60) ||
+    /^(summary|diagnosis|assessment|plan|medications|prescription|instructions|follow[- ]?up|advice|notes|symptoms|recommendations)\b[:\-]?$/i.test(
+      trimmed
+    );
+
+  if (isSectionHeading) {
+    return (
+      <h4 key={idx} className="pnw-note-section-title">
+        {trimmed.replace(/:$/, "")}
+      </h4>
+    );
+  }
+
+  return (
+    <p key={idx} className="pnw-note-paragraph">
+      {trimmed}
+    </p>
+  );
 };
 
 export default function PatientNoteCard({ isDedicatedPage = false }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedNote, setSelectedNote] = useState(null);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSpecialty, setSelectedSpecialty] = useState("All");
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   useEffect(() => {
-    fetchMyNotes();
+    if (user?.id) {
+      fetchMyNotes();
+    } else {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchMyNotes = async () => {
@@ -66,416 +127,317 @@ export default function PatientNoteCard({ isDedicatedPage = false }) {
     setLoading(false);
   };
 
-  // Specialties list for filter chips
   const specialties = useMemo(() => {
-    const set = new Set();
-    notes.forEach((n) => {
-      if (n.doctor?.specialty) set.add(n.doctor.specialty);
-    });
-    return ["All", ...Array.from(set)];
+    const specs = new Set(notes.map((n) => n.doctor?.specialty).filter(Boolean));
+    return ["All", ...Array.from(specs)];
   }, [notes]);
 
-  // Filtered notes based on search & specialty
   const filteredNotes = useMemo(() => {
     return notes.filter((n) => {
-      const docName = (n.doctor?.name || "").toLowerCase();
-      const spec = (n.doctor?.specialty || "").toLowerCase();
-      const noteText = (n.patientNote || "").toLowerCase();
-      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !searchQuery ||
+        n.doctor?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        n.doctor?.specialty?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        n.patientNote?.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesSearch = !q || docName.includes(q) || spec.includes(q) || noteText.includes(q);
-      const matchesSpec = selectedSpecialty === "All" || n.doctor?.specialty === selectedSpecialty;
+      const matchesSpec =
+        selectedSpecialty === "All" || n.doctor?.specialty === selectedSpecialty;
 
       return matchesSearch && matchesSpec;
     });
   }, [notes, searchQuery, selectedSpecialty]);
 
-  // KPI Stats
+  const activeNote = useMemo(() => {
+    if (filteredNotes.length === 0) return null;
+    if (selectedNote && filteredNotes.some((n) => n.id === selectedNote.id)) {
+      return selectedNote;
+    }
+    return filteredNotes[0];
+  }, [filteredNotes, selectedNote]);
+
   const stats = useMemo(() => {
     const total = notes.length;
     const docCount = new Set(notes.map((n) => n.doctor?.name).filter(Boolean)).size;
-    const latestDate = notes[0]?.updatedAt
-      ? new Date(notes[0].updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-      : "None";
+    const latestDate =
+      notes.length > 0
+        ? new Date(notes[0].createdAt).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })
+        : "—";
     return { total, docCount, latestDate };
   }, [notes]);
 
-  const handlePrint = () => {
-    window.print();
+  const handleSelectNote = (note) => {
+    setSelectedNote(note);
+    setMobileDetailOpen(true);
   };
 
   if (loading) {
     return (
-      <div className="pnc-loading-state">
-        <div className="pnc-spinner"></div>
-        <p>Retrieving your health consultation records...</p>
-      </div>
-    );
-  }
-
-  // If not dedicated page and no notes, keep hidden
-  if (notes.length === 0 && !isDedicatedPage) return null;
-
-  // Dedicated page empty state
-  if (notes.length === 0 && isDedicatedPage) {
-    return (
-      <div className="pnc-empty-screen">
-        <div className="pnc-empty-icon-wrap">
-          <FaFileMedical />
+      <div className="pnw-shell">
+        <div className="pnw-state-card">
+          <div className="pnw-spinner" />
+          <h3 className="pnw-state-title">Loading your consultation notes</h3>
+          <p className="pnw-state-desc">Fetching your visit summaries and doctor instructions...</p>
         </div>
-        <h3>No Consultation Notes Yet</h3>
-        <p>
-          Once your doctor completes a consultation session, your official medical summary,
-          lifestyle guidance, and prescriptions will appear here securely.
-        </p>
       </div>
     );
   }
+
+  if (notes.length === 0) {
+    if (!isDedicatedPage) return null;
+    return (
+      <div className="pnw-shell">
+        <div className="pnw-state-card">
+          <div className="pnw-state-icon">
+            <FiFileText />
+          </div>
+          <h3 className="pnw-state-title">No consultation notes yet</h3>
+          <p className="pnw-state-desc">
+            After your doctor completes and approves a consultation summary, it will appear here
+            for you to read anytime.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const activeSpecColor = activeNote
+    ? getSpecialtyColor(activeNote.doctor?.specialty)
+    : getSpecialtyColor("");
 
   return (
-    <>
-      <div className="pnc-redesign-container">
-        {/* HERO / HEADER SECTION */}
-        <div className="pnc-hero-card">
-          <div className="pnc-hero-info">
-            <div className="pnc-hero-icon-box">
-              <FaClipboardList />
-            </div>
-            <div>
-              <div className="pnc-hero-badge">
-                <BsShieldCheck /> Medical Records Desk
-              </div>
-              <h2 className="pnc-hero-title">Consultation Health Notes</h2>
-              <p className="pnc-hero-sub">
-                Official clinical summaries, diagnosis notes, and medical guidance signed by your doctors.
-              </p>
-            </div>
-          </div>
-
-          {/* KPI STATS BAR */}
-          <div className="pnc-kpi-bar">
-            <div className="pnc-kpi-item">
-              <span className="pnc-kpi-val">{stats.total}</span>
-              <span className="pnc-kpi-lbl">Total Records</span>
-            </div>
-            <div className="pnc-kpi-divider" />
-            <div className="pnc-kpi-item">
-              <span className="pnc-kpi-val">{stats.docCount}</span>
-              <span className="pnc-kpi-lbl">Doctors</span>
-            </div>
-            <div className="pnc-kpi-divider" />
-            <div className="pnc-kpi-item">
-              <span className="pnc-kpi-val">{stats.latestDate}</span>
-              <span className="pnc-kpi-lbl">Latest Visit</span>
-            </div>
-          </div>
+    <div className="pnw-shell">
+      {/* Clean Header */}
+      <div className="pnw-header">
+        <div className="pnw-title-group">
+          <span className="pnw-eyebrow">
+            <FiFileText />
+            Patient Visit Summaries
+          </span>
+          <h1 className="pnw-title">My Consultation Notes</h1>
+          <p className="pnw-subtitle">
+            Select any visit on the left to read your doctor&apos;s notes, medications, and care
+            instructions.
+          </p>
         </div>
 
-        {/* CONTROLS: SEARCH & SPECIALTY FILTER CHIPS */}
-        <div className="pnc-controls-strip">
-          <div className="pnc-search-wrapper">
-            <FaSearch className="pnc-search-icon" />
-            <input
-              type="text"
-              className="pnc-search-input"
-              placeholder="Search by doctor, specialty, medicine or note text..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button className="pnc-search-clear" onClick={() => setSearchQuery("")}>
-                <FaTimes />
-              </button>
-            )}
+        <div className="pnw-stats-row">
+          <div className="pnw-stat-pill">
+            <span>Total Notes</span>
+            <strong>{stats.total}</strong>
           </div>
+          <div className="pnw-stat-pill">
+            <span>Doctors</span>
+            <strong>{stats.docCount}</strong>
+          </div>
+          <div className="pnw-stat-pill">
+            <span>Latest Visit</span>
+            <strong>{stats.latestDate}</strong>
+          </div>
+        </div>
+      </div>
 
-          {specialties.length > 2 && (
-            <div className="pnc-filter-chips">
-              {specialties.map((spec) => (
-                <button
-                  key={spec}
-                  className={`pnc-chip ${selectedSpecialty === spec ? "active" : ""}`}
-                  onClick={() => setSelectedSpecialty(spec)}
-                >
-                  {spec}
-                </button>
-              ))}
-            </div>
+      {/* Search & Specialty Filters */}
+      <div className="pnw-toolbar">
+        <div className="pnw-search-box">
+          <FiSearch className="pnw-search-icon" />
+          <input
+            type="text"
+            className="pnw-search-input"
+            placeholder="Search by doctor, specialty, or note..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="pnw-clear-btn"
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search"
+            >
+              <FiX />
+            </button>
           )}
         </div>
 
-        {/* RESULTS GRID */}
-        {filteredNotes.length === 0 ? (
-          <div className="pnc-no-results">
-            <p>No health notes match &ldquo;{searchQuery}&rdquo;</p>
+        <div className="pnw-filter-chips">
+          {specialties.map((spec) => (
             <button
-              className="pnc-reset-btn"
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedSpecialty("All");
-              }}
+              key={spec}
+              type="button"
+              className={`pnw-chip ${selectedSpecialty === spec ? "active" : ""}`}
+              onClick={() => setSelectedSpecialty(spec)}
             >
-              Reset Filters
+              {spec}
             </button>
-          </div>
-        ) : (
-          <div className="pnc-grid-cards">
-            {filteredNotes.map((note) => {
-              const specStyle = getSpecialtyColor(note.doctor?.specialty);
-              const { snippet, hasMeds } = parseNotePreview(note.patientNote);
-              const formattedDate = new Date(note.updatedAt || note.createdAt).toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              });
-
-              return (
-                <div
-                  key={note.id}
-                  className="pnc-smart-card"
-                  onClick={() => setSelectedNote(note)}
-                  style={{ "--card-accent": specStyle.text }}
-                >
-                  {/* Top Row: Doctor Info & Verification Status */}
-                  <div className="pnc-smart-top">
-                    <div className="pnc-doc-identity">
-                      <div
-                        className="pnc-avatar-stylish"
-                        style={{ background: specStyle.gradient }}
-                      >
-                        {note.doctor?.name?.[0]?.toUpperCase() || "D"}
-                      </div>
-                      <div className="pnc-doc-details">
-                        <h4 className="pnc-doc-name">{note.doctor?.name || "Attending Doctor"}</h4>
-                        <div className="pnc-doc-tags">
-                          <span
-                            className="pnc-spec-pill"
-                            style={{
-                              backgroundColor: specStyle.bg,
-                              color: specStyle.text,
-                              borderColor: specStyle.border,
-                            }}
-                          >
-                            <FaStethoscope style={{ fontSize: 10, marginRight: 4 }} />
-                            {note.doctor?.specialty || "General Specialist"}
-                          </span>
-                          <span className="pnc-date-pill">
-                            <FaCalendarAlt style={{ fontSize: 10, marginRight: 4 }} />
-                            {formattedDate}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="pnc-status-pill">
-                      <span className="pnc-pulse-dot"></span>
-                      <MdOutlineVerified style={{ fontSize: 13, marginRight: 3 }} />
-                      Verified
-                    </div>
-                  </div>
-
-                  {/* Middle Row: Clinical Excerpt Preview */}
-                  <div className="pnc-preview-bubble">
-                    <div className="pnc-preview-label">Doctor&apos;s Advice & Treatment:</div>
-                    <p className="pnc-preview-text">&ldquo;{snippet}&rdquo;</p>
-                  </div>
-
-                  {/* Bottom Row: Tags & Action Button */}
-                  <div className="pnc-smart-bottom">
-                    <div className="pnc-badges-row">
-                      {hasMeds && (
-                        <span className="pnc-med-chip">
-                          <FaPills style={{ marginRight: 4 }} /> Rx Prescribed
-                        </span>
-                      )}
-                      <span className="pnc-verified-tag">
-                        <BsShieldCheck style={{ marginRight: 3 }} /> Signed Note
-                      </span>
-                    </div>
-
-                    <button
-                      className="pnc-action-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedNote(note);
-                      }}
-                    >
-                      <span>View Note</span>
-                      <FaArrowRight className="pnc-arrow-icon" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+          ))}
+        </div>
       </div>
 
-      {/* DETAILED NOTE MODAL / LETTERHEAD VIEW */}
-      {selectedNote && (
-        <div
-          className="pnc-overlay"
-          onClick={(e) => e.target === e.currentTarget && setSelectedNote(null)}
-        >
-          <div className="pnc-modal-sheet">
-            {/* Modal Header Bar */}
-            <div className="pnc-sheet-header">
-              <div className="pnc-sheet-header-left">
-                <div className="pnc-sheet-hospital-icon">
-                  <MdLocalHospital />
-                </div>
-                <div>
-                  <div className="pnc-sheet-title-badge">OFFICIAL CONSULTATION RECORD</div>
-                  <h3 className="pnc-sheet-title">Doctor Consultation Summary</h3>
-                </div>
-              </div>
-              <div className="pnc-sheet-header-actions">
-                <button
-                  type="button"
-                  className="pnc-sheet-btn-print"
-                  onClick={handlePrint}
-                  title="Print Consultation Note"
-                >
-                  <FaPrint style={{ marginRight: 6 }} /> Print Note
-                </button>
-                <button
-                  type="button"
-                  className="pnc-sheet-btn-close"
-                  onClick={() => setSelectedNote(null)}
-                >
-                  <FaTimes />
-                </button>
-              </div>
+      {/* Main Split Workspace */}
+      {filteredNotes.length === 0 ? (
+        <div className="pnw-state-card">
+          <div className="pnw-state-icon">
+            <FiSearch />
+          </div>
+          <h3 className="pnw-state-title">No matching notes found</h3>
+          <p className="pnw-state-desc">
+            Try clearing your search or switching the specialty filter to view all your notes.
+          </p>
+        </div>
+      ) : (
+        <div className={`pnw-workspace ${mobileDetailOpen ? "has-selection" : ""}`}>
+          {/* Left Sidebar: Notes List */}
+          <aside className="pnw-sidebar" aria-label="Consultation notes list">
+            <div className="pnw-sidebar-header">
+              <span>Consultations</span>
+              <span className="pnw-count-badge">{filteredNotes.length}</span>
             </div>
 
-            {/* Doctor & Patient Metadata Row */}
-            <div className="pnc-sheet-meta-bar">
-              <div className="pnc-sheet-meta-doc">
-                <div
-                  className="pnc-sheet-doc-avatar"
-                  style={{ background: getSpecialtyColor(selectedNote.doctor?.specialty).gradient }}
-                >
-                  {selectedNote.doctor?.name?.[0]?.toUpperCase() || "D"}
-                </div>
-                <div>
-                  <div className="pnc-sheet-doc-name">
-                    {selectedNote.doctor?.name || "Consulting Doctor"}
-                  </div>
-                  <div className="pnc-sheet-doc-spec">
-                    {selectedNote.doctor?.specialty || "Medical Specialist"}
-                  </div>
-                </div>
-              </div>
+            <div className="pnw-list">
+              {filteredNotes.map((note) => {
+                const specColor = getSpecialtyColor(note.doctor?.specialty);
+                const { snippet, hasMeds } = parseNotePreview(note.patientNote);
+                const isActive = activeNote?.id === note.id;
+                const formattedDate = new Date(note.createdAt).toLocaleDateString("en-IN", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                });
 
-              <div className="pnc-sheet-meta-dates">
-                <div className="pnc-sheet-date-item">
-                  <span className="pnc-meta-lbl">Date of Consultation:</span>
-                  <span className="pnc-meta-val">
-                    {new Date(selectedNote.updatedAt || selectedNote.createdAt).toLocaleDateString("en-IN", {
-                      weekday: "short",
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </span>
-                </div>
-                <div className="pnc-sheet-date-item">
-                  <span className="pnc-meta-lbl">Record Status:</span>
-                  <span className="pnc-meta-status-approved">
-                    <FaCheckCircle style={{ marginRight: 4 }} /> Signed & Approved
-                  </span>
-                </div>
-              </div>
+                return (
+                  <button
+                    key={note.id}
+                    type="button"
+                    className={`pnw-list-item ${isActive ? "active" : ""}`}
+                    onClick={() => handleSelectNote(note)}
+                  >
+                    <div className="pnw-item-top">
+                      <div
+                        className="pnw-avatar-sm"
+                        style={{ backgroundColor: specColor.avatar }}
+                      >
+                        {getDoctorInitials(note.doctor?.name)}
+                      </div>
+                      <div className="pnw-item-meta">
+                        <div className="pnw-item-doc">
+                          Dr. {note.doctor?.name || "Attending Physician"}
+                        </div>
+                        <div className="pnw-item-sub">
+                          <FiCalendar />
+                          <span>{formattedDate}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="pnw-item-snippet">{snippet}</p>
+
+                    <div className="pnw-item-tags">
+                      <span
+                        className="pnw-spec-tag"
+                        style={{
+                          backgroundColor: specColor.bg,
+                          color: specColor.text,
+                          border: `1px solid ${specColor.border}`,
+                        }}
+                      >
+                        {note.doctor?.specialty || "General Medicine"}
+                      </span>
+
+                      {hasMeds && (
+                        <span className="pnw-rx-tag">
+                          <FaPills />
+                          Rx Included
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
+          </aside>
 
-            {/* Modal Body / Formatted Clinical Content */}
-            <div className="pnc-sheet-body">
-              <div className="pnc-clinical-letterhead">
-                <div className="pnc-letterhead-watermark">CLINICAL NOTE</div>
-
-                {selectedNote.patientNote
-                  ?.split("\n")
-                  .map((line, i) => {
-                    const trimmed = line.trim();
-                    if (!trimmed) return <div key={i} className="pnc-line-spacer" />;
-
-                    if (i === 0 && (trimmed.toLowerCase().startsWith("from") || trimmed.toLowerCase().startsWith("note"))) {
-                      return (
-                        <div key={i} className="pnc-formatted-from-header">
-                          <FaUserMd style={{ marginRight: 6 }} />
-                          {trimmed}
-                        </div>
-                      );
-                    }
-
-                    if (trimmed.startsWith("•") || trimmed.startsWith("-") || trimmed.startsWith("*")) {
-                      return (
-                        <div key={i} className="pnc-formatted-bullet">
-                          <span className="pnc-bullet-sym">•</span>
-                          <span>{trimmed.replace(/^[•\-\*]\s*/, "")}</span>
-                        </div>
-                      );
-                    }
-
-                    if (/^\d+\./.test(trimmed)) {
-                      const [num, ...rest] = trimmed.split(". ");
-                      return (
-                        <div key={i} className="pnc-formatted-numbered">
-                          <span className="pnc-num-circle">{num}</span>
-                          <span>{rest.join(". ")}</span>
-                        </div>
-                      );
-                    }
-
-                    // Section Heading like "Prescription:" or "Advice:"
-                    if ((trimmed.length < 50 && !trimmed.endsWith(".")) || trimmed.endsWith(":")) {
-                      return (
-                        <div key={i} className="pnc-formatted-section-head">
-                          {trimmed}
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <p key={i} className="pnc-formatted-para">
-                        {trimmed}
-                      </p>
-                    );
-                  })}
-              </div>
-
-              {/* Safety Guidance Banner */}
-              <div className="pnc-safety-card">
-                <div className="pnc-safety-icon">
-                  <FaPills />
-                </div>
-                <div className="pnc-safety-text">
-                  <strong>Patient Instructions & Safety Reminder:</strong>
-                  <p>
-                    Follow the instructions and medication dosages carefully. Do not modify prescribed medications
-                    without doctor supervision. In case of unexpected side effects, contact the hospital immediately.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="pnc-sheet-footer">
-              <div className="pnc-footer-hospital-seal">
-                <MdOutlineVerified style={{ color: "#10b981", fontSize: 16 }} />
-                <span>Digitally signed official medical record</span>
-              </div>
+          {/* Right Reader Pane */}
+          {activeNote && (
+            <section className="pnw-reader" aria-label="Selected consultation note">
               <button
                 type="button"
-                className="pnc-close-btn-secondary"
-                onClick={() => setSelectedNote(null)}
+                className="pnw-mobile-back"
+                onClick={() => setMobileDetailOpen(false)}
               >
-                Done
+                <FiChevronLeft />
+                Back to all notes
               </button>
-            </div>
-          </div>
+
+              <div className="pnw-reader-header">
+                <div className="pnw-reader-doc-wrap">
+                  <div
+                    className="pnw-avatar-lg"
+                    style={{ backgroundColor: activeSpecColor.avatar }}
+                  >
+                    {getDoctorInitials(activeNote.doctor?.name)}
+                  </div>
+                  <div>
+                    <h2 className="pnw-reader-doc">
+                      Dr. {activeNote.doctor?.name || "Attending Physician"}
+                    </h2>
+                    <div className="pnw-reader-sub">
+                      <span
+                        className="pnw-spec-tag"
+                        style={{
+                          backgroundColor: activeSpecColor.bg,
+                          color: activeSpecColor.text,
+                          border: `1px solid ${activeSpecColor.border}`,
+                        }}
+                      >
+                        {activeNote.doctor?.specialty || "General Medicine"}
+                      </span>
+                      <span>
+                        <FiCalendar style={{ verticalAlign: "-2px", marginRight: 5 }} />
+                        {new Date(activeNote.createdAt).toLocaleDateString("en-IN", {
+                          weekday: "short",
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pnw-reader-actions">
+                  <span className="pnw-signed-pill">
+                    <FiCheckCircle />
+                    Signed by Doctor
+                  </span>
+                </div>
+              </div>
+
+              <div className="pnw-reader-body">
+                <div className="pnw-note-content">
+                  {(activeNote.patientNote || "")
+                    .split("\n")
+                    .map((line, idx) => renderFormattedLine(line, idx))}
+                </div>
+
+                <div className="pnw-safety-box">
+                  <FiAlertCircle className="pnw-safety-icon" />
+                  <div>
+                    <p className="pnw-safety-title">Care &amp; Medication Reminder</p>
+                    <p className="pnw-safety-text">
+                      Please follow the instructions and dosage noted above. Contact your doctor or
+                      clinic if you experience new symptoms or have questions about your treatment.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
         </div>
       )}
-    </>
+    </div>
   );
 }

@@ -1,5 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* ── MODERN CLINIC DESIGN SYSTEM ── */
 :root {
   /* Brand Colors */
@@ -379,7 +383,7 @@ input, select, textarea { font-family: inherit; outline: none; transition: all 0
 }
 
 .header-badge,
-.header span:not(.back-btn span) {
+.header span:not(.back-btn span):not(.cn-modal span):not(.consult-modal span) {
   font-size: 11.5px;
   font-weight: 700;
   background-color: var(--primary-light);
@@ -4868,5 +4872,91 @@ input:checked + .slider:before {
 .clear-chat-btn:hover {
   background: rgba(255, 255, 255, 0.3);
 }
+
+/* ── UNIVERSAL INTERACTIVE CURSOR RULES ── */
+/* Ensures pointer cursor appears everywhere user can click or interact */
+button,
+[role="button"],
+a,
+input[type="submit"],
+input[type="button"],
+input[type="reset"],
+input[type="checkbox"],
+input[type="radio"],
+select,
+.sidebar-link,
+.practo-nav-link,
+.doctor-nav-link,
+.practo-brand,
+.doctor-brand,
+.sidebar-brand,
+.practo-location-pill,
+.practo-user-pill,
+.doctor-user-pill,
+.notification-bell,
+.patient-web-bell,
+.chat-icon,
+.role-pill,
+.back-btn,
+.analyze-btn,
+.clear-patient-btn,
+.consult-tab,
+.consult-close-btn,
+.consult-trigger-btn,
+.action-btn,
+.doc-book-btn,
+.doc-filter-pill,
+.doc-action-btn,
+.pp-btn-outline,
+.pp-btn-primary,
+.pp-btn-edit,
+.pp-btn-logout,
+.pp-modal-close,
+.pp-btn-cancel,
+.pp-btn-save,
+.pp-filter-tab,
+.pp-btn-book-primary,
+.modal-confirm-booking-btn,
+.modal-close-btn,
+.doctor-card-action-btn,
+.clinic-card-action-btn,
+.clinic-tab-pill,
+.toast-action-btn,
+.pagination button,
+tr[onClick],
+[onClick],
+/* Date & Time picker inputs and internal calendar/clock icons */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+.doc-slot-input,
+.modal-date-picker,
+.modal-time-picker {
+  cursor: pointer;
+}
+
+/* Make sure the native browser calendar and clock picker indicators also show pointer */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+/* Disabled states should show not-allowed */
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled,
+.btn:disabled,
+.pagination button:disabled,
+[disabled] {
+  cursor: not-allowed !important;
+}
+
+input[type="date"]:disabled::-webkit-calendar-picker-indicator,
+input[type="time"]:disabled::-webkit-calendar-picker-indicator {
+  cursor: not-allowed !important;
+}
+
 
 

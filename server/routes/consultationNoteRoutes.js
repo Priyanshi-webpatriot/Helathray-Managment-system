@@ -13,7 +13,10 @@ import {
 
 const router = express.Router();
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+});
 
 // Transcribe audio → transcript (doctor only)
 router.post("/transcribe", checkRole(["doctor", "admin"]), upload.single("audio"), transcribeAudio);

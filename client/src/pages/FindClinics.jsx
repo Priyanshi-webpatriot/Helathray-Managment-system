@@ -174,6 +174,29 @@ export default function FindClinics() {
     return matchesName && matchesSpec && matchesCity;
   });
 
+  const getTodayDateStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const isSlotPastForToday = (slotTimeStr) => {
+    if (!bookingDate || bookingDate !== getTodayDateStr()) return false;
+    const match = slotTimeStr.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+    if (!match) return false;
+    let hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const mod = match[3];
+    if (mod === "PM" && hours < 12) hours += 12;
+    if (mod === "AM" && hours === 12) hours = 0;
+
+    const now = new Date();
+    const slotDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
+    return slotDate.getTime() <= now.getTime();
+  };
+
   // Handle Book Appointment inside View Clinic Modal
   const handleBookAppointment = async () => {
     if (!user) {
@@ -186,8 +209,19 @@ export default function FindClinics() {
       return;
     }
 
+    const todayStr = getTodayDateStr();
+    if (bookingDate < todayStr) {
+      toast.error("Cannot book an appointment for a past date. Please select today or a future date.");
+      return;
+    }
+
     if (!bookingTime) {
       toast.warning("Please select a time slot");
+      return;
+    }
+
+    if (isSlotPastForToday(bookingTime)) {
+      toast.error("Cannot book an appointment for a past time slot. Please select an upcoming slot.");
       return;
     }
 
@@ -522,11 +556,21 @@ export default function FindClinics() {
                       onChange={(e) => setBookingTime(e.target.value)}
                     >
                       <option value="">-- Choose Slot --</option>
-                      <option value="10:00 AM">10:00 AM - Morning Slot</option>
-                      <option value="11:30 AM">11:30 AM - Morning Slot</option>
-                      <option value="02:00 PM">02:00 PM - Afternoon Slot</option>
-                      <option value="05:00 PM">05:00 PM - Evening Slot</option>
-                      <option value="07:00 PM">07:00 PM - Evening Slot</option>
+                      <option value="10:00 AM" disabled={isSlotPastForToday("10:00 AM")}>
+                        10:00 AM - Morning Slot {isSlotPastForToday("10:00 AM") ? "(Passed)" : ""}
+                      </option>
+                      <option value="11:30 AM" disabled={isSlotPastForToday("11:30 AM")}>
+                        11:30 AM - Morning Slot {isSlotPastForToday("11:30 AM") ? "(Passed)" : ""}
+                      </option>
+                      <option value="02:00 PM" disabled={isSlotPastForToday("02:00 PM")}>
+                        02:00 PM - Afternoon Slot {isSlotPastForToday("02:00 PM") ? "(Passed)" : ""}
+                      </option>
+                      <option value="05:00 PM" disabled={isSlotPastForToday("05:00 PM")}>
+                        05:00 PM - Evening Slot {isSlotPastForToday("05:00 PM") ? "(Passed)" : ""}
+                      </option>
+                      <option value="07:00 PM" disabled={isSlotPastForToday("07:00 PM")}>
+                        07:00 PM - Evening Slot {isSlotPastForToday("07:00 PM") ? "(Passed)" : ""}
+                      </option>
                     </select>
                   </div>
                 </div>

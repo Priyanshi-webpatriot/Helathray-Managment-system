@@ -1,10 +1,18 @@
 import prisma from "../prisma/client.js";
 import { processReminders } from "../utils/reminderCron.js";
+import { validateAppointmentDateTime } from "../utils/dateTimeValidator.js";
 
 // BOOK APPOINTMENT
 export const createAppointment = async (req, res) => {
   try {
     const { patientId, doctorId, date, time } = req.body;
+
+    // Validate that appointment date/time is not in the past
+    const check = validateAppointmentDateTime(date, time);
+    if (!check.valid) {
+      return res.status(400).json({ error: check.error });
+    }
+
     const appointment = await prisma.appointment.create({
       data: {
         patientId: Number(patientId),

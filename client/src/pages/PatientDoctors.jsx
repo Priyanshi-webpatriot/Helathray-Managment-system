@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../api";
 import "../styles/patientDoctors.css";
-import ChatBox from "../components/ChatBox";
 import { toast } from "react-toastify";
 
 import * as XLSX from "xlsx";
@@ -11,24 +10,39 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 import { useNavigate, useLocation } from "react-router-dom";
-import { 
-  FaArrowLeft, FaFileExcel, FaFilePdf, FaSearch, FaThLarge, FaList,
-  FaStethoscope, FaHeartbeat, FaBaby, FaPumpSoap, FaBone, FaBrain, FaTimes,
-  FaLightbulb, FaCheckCircle, FaStar, FaHospital, FaPhoneAlt, FaCalendarAlt,
-  FaClock, FaUserMd, FaUndo, FaAward, FaSearchMinus, FaMapMarkerAlt
+import {
+  FaArrowLeft,
+  FaFileExcel,
+  FaFilePdf,
+  FaSearch,
+  FaThLarge,
+  FaList,
+  FaStethoscope,
+  FaHeartbeat,
+  FaBaby,
+  FaPumpSoap,
+  FaBone,
+  FaBrain,
+  FaTimes,
+  FaCheckCircle,
+  FaHospital,
+  FaPhoneAlt,
+  FaCalendarAlt,
+  FaClock,
+  FaUndo,
+  FaAward,
+  FaSearchMinus,
+  FaMapMarkerAlt,
+  FaCalendarCheck,
 } from "react-icons/fa";
 
-
-
-
-
 export default function PatientDoctors() {
-
   const navigate = useNavigate();
   const location = useLocation();
   const searchParam = new URLSearchParams(location.search).get("search") || "";
   const nearMeParam = new URLSearchParams(location.search).get("nearMe") === "true";
-  const initialLocation = new URLSearchParams(location.search).get("location") || (nearMeParam ? "Near Me" : "");
+  const initialLocation =
+    new URLSearchParams(location.search).get("location") || (nearMeParam ? "Near Me" : "");
 
   const [doctors, setDoctors] = useState([]);
   const [bookedDoctors, setBookedDoctors] = useState([]);
@@ -44,7 +58,12 @@ export default function PatientDoctors() {
   const [userCoords, setUserCoords] = useState(null);
   const [userCity, setUserCity] = useState("");
 
-  // Native Geolocation Handler (No third-party APIs used)
+  const [currentPage, setCurrentPage] = useState(1);
+  const doctorsPerPage = 6;
+
+  const user = JSON.parse(localStorage.getItem("user") || "null");
+
+  // Native Geolocation Handler
   const handleDetectLocation = () => {
     const patientCity = user?.city || user?.address || "Ahmedabad";
 
@@ -59,7 +78,9 @@ export default function PatientDoctors() {
           setIsNearMeActive(true);
           setLocationSearch(`Near Me (${patientCity})`);
           setCurrentPage(1);
-          toast.success(`Location detected! Showing doctors near ${patientCity}.`, { toastId: "loc-success" });
+          toast.success(`Location detected! Showing doctors near ${patientCity}.`, {
+            toastId: "loc-success",
+          });
         },
         (err) => {
           console.warn("Geolocation error, using registered patient location:", err);
@@ -81,108 +102,95 @@ export default function PatientDoctors() {
     }
   };
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-
-  const doctorsPerPage = 5;
-
-  const user = JSON.parse(localStorage.getItem("user"));
-
   // FETCH DOCTORS
   const fetchDoctors = async () => {
-
     try {
-
       const res = await API.get("/doctors");
-
-      setDoctors(res.data);
-
+      setDoctors(res.data || []);
     } catch (error) {
-
-      console.log(error);
-
+      console.log("Failed to load doctors:", error);
     }
   };
 
   // FETCH BOOKED APPOINTMENTS
-  const fetchBookedDoctores = async () => {
-
+  const fetchBookedDoctors = async () => {
     try {
-
       if (!user) return;
-
-      const res = await API.get(
-        "/patient-appointments/my",
-        {
-          headers: {
-            role: user.role,
-            userid: user.id,
-          },
-        }
-      );
-
-      setBookedDoctors(res.data);
-
+      const res = await API.get("/patient-appointments/my", {
+        headers: {
+          role: user.role,
+          userid: user.id,
+        },
+      });
+      setBookedDoctors(res.data || []);
     } catch (error) {
-
-      console.log(error);
-
+      console.log("Failed to load booked appointments:", error);
     }
   };
 
   useEffect(() => {
-
     fetchDoctors();
-
-    fetchBookedDoctores();
+    fetchBookedDoctors();
 
     if (nearMeParam) {
       handleDetectLocation();
     }
 
     const handleAppointmentBooked = () => {
-
-      fetchBookedDoctores();
-
+      fetchBookedDoctors();
     };
 
-    window.addEventListener(
-      "appointmentBooked",
-      handleAppointmentBooked
-    );
-
+    window.addEventListener("appointmentBooked", handleAppointmentBooked);
     return () => {
-
-      window.removeEventListener(
-        "appointmentBooked",
-        handleAppointmentBooked
-      );
-
+      window.removeEventListener("appointmentBooked", handleAppointmentBooked);
     };
-
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const getTodayDateStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const getCurrentTimeStr = () => {
+    const d = new Date();
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  };
 
   // BOOK APPOINTMENT
   const handleBook = async (doctorId) => {
-
     try {
-
       if (!user) {
-        toast.warning("Please login first");
+        toast.warning("Please login first to book an appointment");
         return;
       }
 
       const selectedDate = selectedDates[doctorId];
-
       const selectedTime = selectedTimes[doctorId];
 
       if (!selectedDate) {
-        toast.warning("Please select appointment date");
+        toast.warning("Please select an appointment date");
+        return;
+      }
+
+      const todayStr = getTodayDateStr();
+      if (selectedDate < todayStr) {
+        toast.error("Cannot book for a past date. Please select today or a future date.");
         return;
       }
 
       if (!selectedTime) {
-        toast.warning("Please select appointment time");
+        toast.warning("Please select an appointment time slot");
+        return;
+      }
+
+      if (selectedDate === todayStr && selectedTime <= getCurrentTimeStr()) {
+        toast.error("Cannot book for a past time. Please select an upcoming time slot.");
         return;
       }
 
@@ -211,131 +219,64 @@ export default function PatientDoctors() {
           time: selectedTime,
         },
       ]);
-
     } catch (error) {
-      console.log(error);
-      toast.error(
-        error.response?.data?.error ||
-        "Booking failed. Please try again."
-      );
+      console.log("Booking error:", error);
+      toast.error(error.response?.data?.error || "Booking failed. Please try again.");
     }
   };
 
   // EXPORT EXCEL
   const exportToExcel = () => {
-
     const excelData = doctors.map((d) => {
-
-      const bookedAppointment =
-        bookedDoctors.find(
-          (b) => b.doctorId === d.id
-        );
-
+      const bookedAppointment = bookedDoctors.find((b) => b.doctorId === d.id);
       return {
-
-        Name: d.name,
-
-        Specialty: d.specialty,
-
-        Experience: d.experience,
-
-        Mobile: d.mobile,
-
-        Status: bookedAppointment
-          ? "Booked"
-          : "Available",
-
-        AppointmentDate: bookedAppointment
-          ? bookedAppointment.date.split("T")[0]
-          : "-",
-
+        Name: `Dr. ${d.name}`,
+        Specialty: d.specialty || "General Medicine",
+        Experience: d.experience ? `${d.experience} Years` : "—",
+        Clinic: d.clinicName || "HealthRay Clinic",
+        City: d.city || "—",
+        Mobile: d.mobile || "—",
+        Status: bookedAppointment ? "Booked" : "Available",
+        AppointmentDate: bookedAppointment ? bookedAppointment.date.split("T")[0] : "-",
         AppointmentTime: bookedAppointment?.time || "-",
       };
     });
 
-    const worksheet =
-      XLSX.utils.json_to_sheet(excelData);
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Doctors");
 
-    const workbook =
-      XLSX.utils.book_new();
+    const excelBuffer = XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "array",
+    });
 
-    XLSX.utils.book_append_sheet(
-      workbook,
-      worksheet,
-      "Doctors"
-    );
+    const fileData = new Blob([excelBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
+    });
 
-    const excelBuffer = XLSX.write(
-      workbook,
-      {
-        bookType: "xlsx",
-        type: "array",
-      }
-    );
-
-    const fileData = new Blob(
-      [excelBuffer],
-      {
-        type:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
-      }
-    );
-
-    saveAs(
-      fileData,
-      "Doctors_List.xlsx"
-    );
+    saveAs(fileData, "Doctors_List.xlsx");
   };
 
   // EXPORT PDF
   const downloadPDF = () => {
-
     const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("HealthRay — Available Doctors Directory", 14, 18);
+    doc.setFontSize(10);
+    doc.text(`Generated on ${new Date().toLocaleDateString("en-IN")}`, 14, 25);
 
-    doc.setFontSize(18);
-
-    doc.text(
-      "Doctors List",
-      14,
-      20
-    );
-
-    const tableColumn = [
-      "Name",
-      "Specialty",
-      "Experience",
-      "Mobile",
-      "Status",
-      "Date",
-      "Time",
-    ];
+    const tableColumn = ["Doctor Name", "Specialty", "Experience", "Clinic / City", "Contact", "Status"];
 
     const tableRows = doctors.map((d) => {
-
-      const bookedAppointment =
-        bookedDoctors.find(
-          (b) => b.doctorId === d.id
-        );
-
+      const bookedAppointment = bookedDoctors.find((b) => b.doctorId === d.id);
       return [
-
-        d.name,
-
-        d.specialty,
-
-        d.experience,
-
-        d.mobile,
-
-        bookedAppointment
-          ? "Booked"
-          : "Available",
-
-        bookedAppointment
-          ? bookedAppointment.date.split("T")[0]
-          : "-",
-
-        bookedAppointment?.time || "-",
+        `Dr. ${d.name}`,
+        d.specialty || "General Medicine",
+        d.experience ? `${d.experience} Yrs` : "—",
+        `${d.clinicName || "Clinic"}, ${d.city || ""}`,
+        d.mobile || "—",
+        bookedAppointment ? "Booked" : "Available",
       ];
     });
 
@@ -343,12 +284,14 @@ export default function PatientDoctors() {
       head: [tableColumn],
       body: tableRows,
       startY: 30,
+      theme: "grid",
+      headStyles: { fillColor: [2, 132, 199] },
     });
 
     doc.save("Doctors_List.pdf");
   };
 
-  // DYNAMICALLY EXTRACT AVAILABLE SPECIALTIES FROM FETCHED DB DOCTORS
+  // SPECIALTY CATEGORIES
   const availableSpecialties = [
     ...new Set(doctors.map((d) => d.specialty?.trim()).filter(Boolean)),
   ];
@@ -369,28 +312,33 @@ export default function PatientDoctors() {
 
   const termLower = (searchTerm || "").trim().toLowerCase();
 
-  // DYNAMICALLY DETERMINE CONDITIONS TREATED BY DOCTOR
   const getDoctorTreats = (doc) => {
     return [
       `${doc.specialty || "General"} Consultation`,
       "Clinical Evaluation",
-      "Specialized Care",
-      "Follow-up & Guidance"
+      "Care & Prescriptions",
+      "Follow-up Guidance",
     ];
   };
 
-  // CHECK IF DOCTOR IS A MATCH FOR CURRENT SEARCH
-  const isDoctorMatch = (doc) => {
-    if (!termLower) return false;
-    const spec = (doc.specialty || "").toLowerCase();
-    const name = (doc.name || "").toLowerCase();
-    return name.includes(termLower) || spec.includes(termLower);
+  const getSpecialtyColor = (specialty = "") => {
+    const s = specialty.toLowerCase();
+    if (s.includes("cardio") || s.includes("heart")) return { bg: "#fef2f2", text: "#dc2626", border: "#fecaca", avatar: "#ef4444" };
+    if (s.includes("neuro") || s.includes("brain")) return { bg: "#f5f3ff", text: "#7c3aed", border: "#ddd6fe", avatar: "#8b5cf6" };
+    if (s.includes("ortho") || s.includes("bone")) return { bg: "#fff7ed", text: "#ea580c", border: "#fed7aa", avatar: "#f97316" };
+    if (s.includes("derm") || s.includes("skin")) return { bg: "#fdf2f8", text: "#db2777", border: "#fbcfe8", avatar: "#ec4899" };
+    if (s.includes("pedia") || s.includes("child")) return { bg: "#ecfeff", text: "#0891b2", border: "#a5f3fc", avatar: "#06b6d4" };
+    return { bg: "#eff6ff", text: "#0284c7", border: "#bae6fd", avatar: "#0284c7" };
   };
 
-  // Calculate distance for all doctors relative to active userCoords
-  const activeUserCoords = userCoords || (isNearMeActive || (locationSearch || "").toLowerCase().includes("near me") ? { lat: 23.0225, lng: 72.5714 } : null);
+  const getDoctorInitials = (name = "") => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "DR";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
 
-  // 100% DYNAMIC LOCATION & DISTANCE PROCESSING
+  // DISTANCE PROCESSING
   const currentDetectedCity = (userCity || "Ahmedabad").trim().toLowerCase();
 
   const doctorsWithDistance = doctors.map((doc) => {
@@ -404,8 +352,11 @@ export default function PatientDoctors() {
       currentDetectedCity.includes(docCity) ||
       docAddress.includes(currentDetectedCity) ||
       docState.includes(currentDetectedCity) ||
-      (currentDetectedCity.includes("ahmed") && (docCity.includes("ahmed") || docAddress.includes("ahmed") || docCity.includes("ahemd"))) ||
-      (docCity.includes("ahmed") || docCity.includes("ahemd") || docAddress.includes("ahmed"));
+      (currentDetectedCity.includes("ahmed") &&
+        (docCity.includes("ahmed") || docAddress.includes("ahmed") || docCity.includes("ahemd"))) ||
+      docCity.includes("ahmed") ||
+      docCity.includes("ahemd") ||
+      docAddress.includes("ahmed");
 
     let distanceKm = null;
     if (userCoords || isNearMeActive) {
@@ -419,20 +370,28 @@ export default function PatientDoctors() {
     return { ...doc, distanceKm, isSameCity };
   });
 
-  // FILTERED DOCTORS (SPECIALTY, LOCATION & NEAR ME)
+  // FILTERED DOCTORS
   const filteredDoctors = doctorsWithDistance.filter((doc) => {
     const spec = (doc.specialty || "").toLowerCase();
     const city = (doc.city || "").toLowerCase();
     const address = (doc.address || "").toLowerCase();
     const clinic = (doc.clinicName || "").toLowerCase();
     const state = (doc.state || "").toLowerCase();
+    const name = (doc.name || "").toLowerCase();
 
-    // 1. Dynamic Specialty filter pill match
+    // 1. Keyword search (Name, Specialty, Clinic, City)
+    const matchesKeyword =
+      !termLower ||
+      name.includes(termLower) ||
+      spec.includes(termLower) ||
+      clinic.includes(termLower) ||
+      city.includes(termLower);
+
+    // 2. Specialty pill filter
     const matchesSpecialty =
-      selectedSpecialty === "All" ||
-      spec.includes(selectedSpecialty.toLowerCase());
+      selectedSpecialty === "All" || spec.includes(selectedSpecialty.toLowerCase());
 
-    // 2. Dynamic Location & Near Me Filter match
+    // 3. Location & Near Me filter
     const locLower = (locationSearch || "").trim().toLowerCase();
     let matchesLocation = true;
 
@@ -447,10 +406,10 @@ export default function PatientDoctors() {
         locLower.includes(city);
     }
 
-    return matchesSpecialty && matchesLocation;
+    return matchesKeyword && matchesSpecialty && matchesLocation;
   });
 
-  // Sort filtered doctors by distance (closest first) when Near Me is active!
+  // Sort by distance when Near Me is active
   if (isNearMeActive || (locationSearch || "").toLowerCase().includes("near me")) {
     filteredDoctors.sort((a, b) => {
       if (a.distanceKm === null) return 1;
@@ -465,251 +424,247 @@ export default function PatientDoctors() {
   const currentDoctors = filteredDoctors.slice(indexOfFirstDoctor, indexOfLastDoctor);
   const totalPages = Math.ceil(filteredDoctors.length / doctorsPerPage) || 1;
 
+  const hasActiveFilters =
+    Boolean(searchTerm) ||
+    selectedSpecialty !== "All" ||
+    Boolean(locationSearch) ||
+    isNearMeActive;
+
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setSelectedSpecialty("All");
+    setLocationSearch("");
+    setIsNearMeActive(false);
+    setCurrentPage(1);
+  };
+
   return (
-    <div className="patient-web-container" style={{ padding: "48px 28px 60px 28px" }}>
-      {/* HEADER */}
-      <div className="pd-header">
-        <div className="pd-header-left">
+    <div className="pd-shell">
+      {/* ── TOP HEADER ── */}
+      <div className="pd-header-card">
+        <div className="pd-header-left-col">
           <button
-            className="pd-back-btn"
+            type="button"
+            className="pd-back-action-btn"
             onClick={() => navigate(-1)}
+            title="Go back"
           >
             <FaArrowLeft />
-            Back
+            <span>Back</span>
           </button>
-          <div>
-            <h2 className="pd-title" style={{ margin: 0 }}>Available Doctors</h2>
-            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600" }}>
-              {filteredDoctors.length} verified Doctors ready for consultation
-            </span>
+          <div className="pd-title-group">
+            <span className="pd-eyebrow">Patient Portal · Doctor Consultations</span>
+            <h1 className="pd-main-title">Find &amp; Book Doctors</h1>
+            <p className="pd-sub-title">
+              Connect with leading specialists for clinic visits and expert healthcare.
+            </p>
           </div>
         </div>
 
-        <div className="pd-header-right">
-          <button
-            className="pd-excel-btn"
-            onClick={exportToExcel}
-          >
-            <FaFileExcel />
-            Export Excel
-          </button>
+        <div className="pd-header-right-col">
+          <div className="pd-count-badge">
+            <strong>{filteredDoctors.length}</strong>
+            <span>Doctors Available</span>
+          </div>
 
-          <button
-            className="pd-pdf-btn"
-            onClick={downloadPDF}
-          >
-            <FaFilePdf />
-            Export PDF
-          </button>
+          <div className="pd-view-toggle">
+            <button
+              type="button"
+              className={`pd-toggle-btn ${viewMode === "cards" ? "active" : ""}`}
+              onClick={() => setViewMode("cards")}
+              title="Card view"
+            >
+              <FaThLarge />
+              <span>Cards</span>
+            </button>
+            <button
+              type="button"
+              className={`pd-toggle-btn ${viewMode === "table" ? "active" : ""}`}
+              onClick={() => setViewMode("table")}
+              title="Table view"
+            >
+              <FaList />
+              <span>Table</span>
+            </button>
+          </div>
+
+          <div className="pd-export-group">
+            <button
+              type="button"
+              className="pd-export-btn excel"
+              onClick={exportToExcel}
+              title="Export doctor list to Excel"
+            >
+              <FaFileExcel />
+              <span>Excel</span>
+            </button>
+            <button
+              type="button"
+              className="pd-export-btn pdf"
+              onClick={downloadPDF}
+              title="Export doctor list to PDF"
+            >
+              <FaFilePdf />
+              <span>PDF</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* PRACTO SEARCH & LOCATION FILTER BAR */}
-      <div className="practo-filter-bar" style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-        
-
-
-        {/* 2. SEPARATED LOCATION & NEAR ME QUICK CONTROLS BAR */}
-        <div className="practo-location-quick-bar" style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "16px",
-          background: "#f8fafc",
-          padding: "12px 18px",
-          borderRadius: "14px",
-          border: "1px solid #e2e8f0",
-          flexWrap: "wrap"
-        }}>
-          {/* Left: Near Me Quick Toggle & City Input */}
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={handleDetectLocation}
-              className={`near-me-toggle-btn ${isNearMeActive ? "active" : ""}`}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                background: isNearMeActive ? "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)" : "#ffffff",
-                color: isNearMeActive ? "#ffffff" : "#0284c7",
-                border: isNearMeActive ? "none" : "1.5px solid #bae6fd",
-                borderRadius: "12px",
-                padding: "8px 18px",
-                fontSize: "13px",
-                fontWeight: "800",
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-                boxShadow: isNearMeActive ? "0 4px 12px rgba(2, 132, 199, 0.25)" : "none"
+      {/* ── INTEGRATED SEARCH & LOCATION BAR ── */}
+      <div className="pd-search-card">
+        <div className="pd-search-row">
+          {/* Doctor / Specialty Search */}
+          <div className="pd-input-block search-block">
+            <FaSearch className="pd-input-icon" />
+            <input
+              type="text"
+              className="pd-text-input"
+              placeholder="Search by doctor name, specialty, or clinic..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
               }}
-            >
-              <FaMapMarkerAlt style={{ color: isNearMeActive ? "#ffffff" : "#0284c7", fontSize: "14px" }} />
-              <span>{isNearMeActive ? " Near Me Active" : " Near Me"}</span>
-            </button>
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                className="pd-clear-icon-btn"
+                onClick={() => {
+                  setSearchTerm("");
+                  setCurrentPage(1);
+                }}
+                aria-label="Clear doctor search"
+              >
+                <FaTimes />
+              </button>
+            )}
+          </div>
 
-            {/* City / Area Manual Input */}
-            <div style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              background: "#ffffff",
-              border: "1px solid #cbd5e1",
-              borderRadius: "12px",
-              padding: "7px 14px",
-              minWidth: "220px"
-            }}>
-              <span style={{ fontSize: "11px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>Location:</span>
-              <input
-                type="text"
-                placeholder="Type City / Area..."
-                value={locationSearch}
-                onChange={(e) => {
-                  setLocationSearch(e.target.value);
+          <div className="pd-search-divider" />
+
+          {/* Location & Near Me Input */}
+          <div className="pd-input-block location-block">
+            <FaMapMarkerAlt className="pd-input-icon location" />
+            <input
+              type="text"
+              className="pd-text-input"
+              placeholder="City, area or clinic address..."
+              value={locationSearch}
+              onChange={(e) => {
+                setLocationSearch(e.target.value);
+                setIsNearMeActive(false);
+                setCurrentPage(1);
+              }}
+            />
+            {locationSearch && (
+              <button
+                type="button"
+                className="pd-clear-icon-btn"
+                onClick={() => {
+                  setLocationSearch("");
                   setIsNearMeActive(false);
                   setCurrentPage(1);
                 }}
-                style={{
-                  border: "none",
-                  outline: "none",
-                  fontSize: "13px",
-                  fontWeight: "700",
-                  color: "#0f172a",
-                  width: "100%",
-                  background: "transparent"
-                }}
-              />
-              {locationSearch && (
+                aria-label="Clear location filter"
+              >
+                <FaTimes />
+              </button>
+            )}
+
+            <button
+              type="button"
+              className={`pd-nearme-btn ${isNearMeActive ? "active" : ""}`}
+              onClick={handleDetectLocation}
+              title="Show doctors near your location"
+            >
+              <FaMapMarkerAlt />
+              <span>{isNearMeActive ? "Near Me Active" : "Near Me"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ── SPECIALTY PILLS SCROLLER ── */}
+        <div className="pd-specialty-bar">
+          <span className="pd-specialty-lbl">Specialty:</span>
+          <div className="pd-specialty-scroll">
+            {specialtyCategories.map((spec) => {
+              const IconComp = spec.icon;
+              const isActive = selectedSpecialty === spec.id;
+              return (
                 <button
+                  key={spec.id}
                   type="button"
+                  className={`pd-spec-chip ${isActive ? "active" : ""}`}
                   onClick={() => {
-                    setLocationSearch("");
-                    setIsNearMeActive(false);
+                    setSelectedSpecialty(spec.id);
                     setCurrentPage(1);
                   }}
-                  style={{ border: "none", background: "transparent", cursor: "pointer", color: "#94a3b8", padding: "0 2px" }}
-                  title="Clear location filter"
                 >
-                  <FaTimes style={{ fontSize: "11px" }} />
+                  <IconComp className="pd-spec-chip-icon" />
+                  <span>{spec.label}</span>
                 </button>
-              )}
-            </div>
-          </div>
-
-          {/* Right: Active Detected Location Badge */}
-          {isNearMeActive && (
-            <div style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              background: "#e0f2fe",
-              border: "1px solid #bae6fd",
-              color: "#0369a1",
-              fontSize: "12px",
-              fontWeight: "700",
-              padding: "6px 14px",
-              borderRadius: "20px"
-            }}>
-              <FaCheckCircle style={{ color: "#0284c7", fontSize: "12px" }} />
-              <span>Showing doctors near {userCity || "your area"}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Separated Specialty Filter Pills & View Toggles Row */}
-        <div className="practo-filter-controls-row">
-          <div className="practo-specialty-group">
-            <span className="practo-filter-label">Filter:</span>
-            <div className="practo-specialty-pills">
-              {specialtyCategories.map((spec) => {
-                const IconComponent = spec.icon;
-                const isActive = selectedSpecialty === spec.id;
-                return (
-                  <button
-                    key={spec.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedSpecialty(spec.id);
-                      setCurrentPage(1);
-                    }}
-                    className={`practo-spec-pill ${isActive ? "active" : ""}`}
-                  >
-                    <IconComponent className="spec-pill-icon" />
-                    <span>{spec.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="practo-view-toggle-wrapper">
-            <span className="practo-filter-label">View:</span>
-            <div className="practo-view-toggles">
-              <button
-                type="button"
-                className={`practo-view-btn ${viewMode === "cards" ? "active" : ""}`}
-                onClick={() => setViewMode("cards")}
-                title="Doctor Cards View"
-              >
-                <FaThLarge />
-                <span>Cards</span>
-              </button>
-              <button
-                type="button"
-                className={`practo-view-btn ${viewMode === "table" ? "active" : ""}`}
-                onClick={() => setViewMode("table")}
-                title="Table View"
-              >
-                <FaList />
-                <span>Table</span>
-              </button>
-            </div>
+              );
+            })}
           </div>
         </div>
+
+        {/* Active Filters Summary Strip */}
+        {hasActiveFilters && (
+          <div className="pd-active-filter-strip">
+            <span className="pd-filter-status-text">
+              Showing filtered results ({filteredDoctors.length} found)
+            </span>
+            <button
+              type="button"
+              className="pd-reset-strip-btn"
+              onClick={handleResetFilters}
+            >
+              <FaUndo /> Reset all filters
+            </button>
+          </div>
+        )}
       </div>
 
-
-
-      {/* DOCTORS CONTENT: CARDS VIEW OR TABLE VIEW */}
+      {/* ── DOCTORS LIST / CARDS VIEW ── */}
       {viewMode === "cards" ? (
-        <div className="practo-doc-list-view">
+        <div className="pd-cards-container">
           {currentDoctors.length === 0 ? (
-            <div className="pd-empty-state">
+            <div className="pd-empty-card">
               <div className="pd-empty-icon-wrap">
-                <FaSearchMinus className="pd-empty-icon" />
+                <FaSearchMinus />
               </div>
-              <h3 className="pd-empty-title">No Matching Doctors Found</h3>
+              <h3 className="pd-empty-title">No doctors found matching your criteria</h3>
               <p className="pd-empty-desc">
-                We couldn't find any doctors matching{" "}
-                {searchTerm ? <strong>"{searchTerm}"</strong> : "your selected criteria"}.
-                Try adjusting your search terms, selecting another specialty, or resetting filters.
+                We couldn&apos;t find any doctors matching your current filters. Try searching for a
+                different specialty, clearing the location, or resetting filters.
               </p>
-              
+
               <div className="pd-empty-suggestions">
-                <span className="pd-empty-sugg-label">Try searching:</span>
-                {["Fever", "Cardiology", "Dermatology", "Orthopedics", "Pediatrics", "Dentist"].map((sugg) => (
-                  <button
-                    key={sugg}
-                    type="button"
-                    className="pd-empty-chip"
-                    onClick={() => {
-                      setSearchTerm(sugg);
-                      setSelectedSpecialty("All");
-                      setCurrentPage(1);
-                    }}
-                  >
-                    {sugg}
-                  </button>
-                ))}
+                <span className="pd-sugg-label">Try searching:</span>
+                {["Cardiology", "Dermatology", "Pediatrics", "Orthopedics", "Ahmedabad"].map(
+                  (sugg) => (
+                    <button
+                      key={sugg}
+                      type="button"
+                      className="pd-sugg-pill"
+                      onClick={() => {
+                        setSearchTerm(sugg);
+                        setSelectedSpecialty("All");
+                        setCurrentPage(1);
+                      }}
+                    >
+                      {sugg}
+                    </button>
+                  )
+                )}
               </div>
 
               <button
                 type="button"
-                className="pd-empty-reset-btn"
-                onClick={() => {
-                  setSearchTerm("");
-                  setSelectedSpecialty("All");
-                  setCurrentPage(1);
-                }}
+                className="pd-empty-reset-action"
+                onClick={handleResetFilters}
               >
                 <FaUndo /> Reset All Filters
               </button>
@@ -717,148 +672,146 @@ export default function PatientDoctors() {
           ) : (
             currentDoctors.map((d) => {
               const bookedAppointment = bookedDoctors.find((b) => b.doctorId === d.id);
-              const isBooked = !!bookedAppointment;
-              const isRecommended = isDoctorMatch(d);
+              const isBooked = Boolean(bookedAppointment);
+              const specColor = getSpecialtyColor(d.specialty);
               const conditionsTreated = getDoctorTreats(d);
 
+              const selectedDate =
+                selectedDates[d.id] ||
+                (bookedAppointment ? bookedAppointment.date.split("T")[0] : "");
+
+              const selectedTime =
+                selectedTimes[d.id] ||
+                (bookedAppointment?.time
+                  ? bookedAppointment.time.includes("T")
+                    ? new Date(bookedAppointment.time).toTimeString().slice(0, 5)
+                    : bookedAppointment.time.slice(0, 5)
+                  : "");
+
               return (
-                <div key={d.id} className="practo-doc-card">
-                  {/* Left Column: Avatar & Verification */}
-                  <div className="doc-card-avatar-wrap">
-                    <div className="doc-avatar-img">
-                      <span className="doc-avatar-initial">{d.name?.[0]?.toUpperCase() || "D"}</span>
-                      <span className="doc-online-indicator" title="Online & Available"></span>
-                    </div>
-                    <span className="doc-verified-badge">
-                      <FaCheckCircle className="doc-verified-icon" /> Verified
-                    </span>
-                  </div>
-
-                  {/* Middle Column: Doctor Information */}
-                  <div className="doc-card-info">
-                    {isRecommended && (
-                      <div className="doc-match-badge">
-                        <FaCheckCircle style={{ color: "#0284c7" }} />
-                        <span>Top Specialist Match {searchTerm ? `for "${searchTerm}"` : ""}</span>
+                <div key={d.id} className="pd-doctor-card">
+                  {/* Left: Doctor Profile Information */}
+                  <div className="pd-doc-main">
+                    <div className="pd-doc-header-row">
+                      <div
+                        className="pd-avatar"
+                        style={{ backgroundColor: specColor.avatar }}
+                      >
+                        {getDoctorInitials(d.name)}
                       </div>
-                    )}
-                    
-                    <div className="doc-name-row">
-                      <h3 className="doc-name">Dr. {d.name}</h3>
-                      <span className="doc-specialty-pill">{d.specialty || "General Medicine"}</span>
-                    </div>
 
-                    <div className="doc-meta-row">
-                      <span className="doc-meta-item">
-                        <FaAward className="doc-meta-icon" />
-                        <strong>{d.experience || "5+"} Years</strong> Experience Overall
-                      </span>
-                      <span className="doc-meta-divider">•</span>
-                      <span className="doc-meta-item">
-                        <FaHospital className="doc-meta-icon" />
-                        {d.clinicName || "HealthRay Clinic"}
-                      </span>
-                      <span className="doc-meta-divider">•</span>
-                      <span className="doc-meta-item" style={{ color: "#0f172a", fontWeight: "600" }}>
-                        <FaMapMarkerAlt className="doc-meta-icon" style={{ color: "#e11d48" }} />
-                        {d.address ? d.address : (d.city || "Ahmedabad")}
-                      </span>
-                      {d.distanceKm !== null && d.distanceKm !== undefined && (
-                        <>
-                          <span className="doc-meta-divider">•</span>
-                          <span className="doc-distance-badge" style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            background: "#f0fdf4",
-                            color: "#166534",
-                            border: "1px solid #bbf7d0",
-                            fontSize: "11.5px",
-                            fontWeight: "700",
-                            padding: "3px 9px",
-                            borderRadius: "20px"
-                          }}>
-                            📍 <strong>{d.distanceKm} km</strong> away
+                      <div className="pd-doc-title-block">
+                        <div className="pd-doc-name-line">
+                          <h2 className="pd-doc-name">Dr. {d.name}</h2>
+                          <span
+                            className="pd-doc-spec-badge"
+                            style={{
+                              backgroundColor: specColor.bg,
+                              color: specColor.text,
+                              borderColor: specColor.border,
+                            }}
+                          >
+                            {d.specialty || "General Medicine"}
                           </span>
-                        </>
-                      )}
-                      <span className="doc-meta-divider">•</span>
-                      <span className="doc-meta-item">
-                        <FaPhoneAlt className="doc-meta-icon" />
-                        {d.mobile || "Direct Contact"}
-                      </span>
+                        </div>
+
+                        <div className="pd-meta-grid">
+                          <div className="pd-meta-item">
+                            <FaAward className="pd-meta-icon award" />
+                            <span>
+                              <strong>{d.experience || "5+"} Years</strong> Experience
+                            </span>
+                          </div>
+
+                          <div className="pd-meta-item">
+                            <FaHospital className="pd-meta-icon hospital" />
+                            <span>{d.clinicName || "HealthRay Clinic"}</span>
+                          </div>
+
+                          <div className="pd-meta-item">
+                            <FaMapMarkerAlt className="pd-meta-icon location" />
+                            <span>{d.address || d.city || "Ahmedabad"}</span>
+                          </div>
+
+                          {d.distanceKm !== null && d.distanceKm !== undefined && (
+                            <div className="pd-distance-pill">
+                              <span>📍 {d.distanceKm} km away</span>
+                            </div>
+                          )}
+
+                          {d.mobile && (
+                            <div className="pd-meta-item">
+                              <FaPhoneAlt className="pd-meta-icon phone" />
+                              <span>{d.mobile}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    {/* <div className="doc-rating-badge">
-                      <span className="doc-rating-stars">
-                        <FaStar /> 4.9
-                      </span>
-                      <span className="doc-rating-sep">|</span>
-                      <span className="doc-satisfaction">98% Patient Satisfaction</span>
-                      <span className="doc-stories-count">(42 Stories)</span>
-                    </div> */}
-
-                    {/* Conditions Treated Chips */}
-                    <div className="doc-treats-container">
-                      <span className="doc-treat-label">Treats:</span>
-                      <div className="doc-treats-list">
-                        {conditionsTreated.slice(0, 4).map((cond, idx) => (
-                          <span key={idx} className="doc-treat-chip">{cond}</span>
+                    {/* Conditions / Services Chips */}
+                    <div className="pd-treats-row">
+                      <span className="pd-treats-lbl">Services:</span>
+                      <div className="pd-treats-chips">
+                        {conditionsTreated.map((item, idx) => (
+                          <span key={idx} className="pd-treat-tag">
+                            {item}
+                          </span>
                         ))}
                       </div>
                     </div>
                   </div>
 
-                  {/* Right Column: Slot Picker & Booking */}
-                  <div className="doc-card-booking">
-                    <div className="doc-booking-header">
-                      <span className={`doc-status-indicator ${isBooked ? "booked" : "available"}`}>
-                        <span className="doc-status-dot"></span>
+                  {/* Right: Appointment Slot Booking Box */}
+                  <div className="pd-booking-box">
+                    <div className="pd-booking-header">
+                      <span className={`pd-status-pill ${isBooked ? "booked" : "available"}`}>
+                        <span className="pd-status-indicator-dot" />
                         {isBooked ? "Appointment Confirmed" : "Available Today"}
                       </span>
                     </div>
 
-                    <div className="doc-slots-row">
-                      <div className="doc-slot-field">
-                        <label>
-                          <FaCalendarAlt className="slot-label-icon" /> Consult Date
+                    <div className="pd-slots-form">
+                      <div className="pd-slot-field">
+                        <label className="pd-slot-label">
+                          <FaCalendarAlt /> Date
                         </label>
                         <input
                           type="date"
-                          className="doc-slot-input"
-                          value={
-                            selectedDates[d.id] ||
-                            (bookedAppointment ? bookedAppointment.date.split("T")[0] : "")
+                          className="pd-slot-input"
+                          value={selectedDate}
+                          min={getTodayDateStr()}
+                          onChange={(e) =>
+                            setSelectedDates({ ...selectedDates, [d.id]: e.target.value })
                           }
-                          min={new Date().toISOString().split("T")[0]}
-                          onChange={(e) => setSelectedDates({ ...selectedDates, [d.id]: e.target.value })}
                           disabled={isBooked}
                         />
                       </div>
 
-                      <div className="doc-slot-field">
-                        <label>
-                          <FaClock className="slot-label-icon" /> Time Slot
+                      <div className="pd-slot-field">
+                        <label className="pd-slot-label">
+                          <FaClock /> Time Slot
                         </label>
                         <input
                           type="time"
-                          className="doc-slot-input"
-                          value={
-                            selectedTimes[d.id] ||
-                            (bookedAppointment?.time
-                              ? (bookedAppointment.time.includes("T")
-                                ? new Date(bookedAppointment.time).toTimeString().slice(0, 5)
-                                : bookedAppointment.time.slice(0, 5))
-                              : "")
+                          className="pd-slot-input"
+                          min={
+                            selectedDates[d.id] === getTodayDateStr()
+                              ? getCurrentTimeStr()
+                              : undefined
                           }
-                          onChange={(e) => setSelectedTimes({ ...selectedTimes, [d.id]: e.target.value })}
+                          value={selectedTime}
+                          onChange={(e) =>
+                            setSelectedTimes({ ...selectedTimes, [d.id]: e.target.value })
+                          }
                           disabled={isBooked}
                         />
                       </div>
                     </div>
 
                     <button
-                      className={`doc-book-btn ${isBooked ? "booked" : ""}`}
+                      type="button"
+                      className={`pd-book-btn ${isBooked ? "confirmed" : ""}`}
                       onClick={() => handleBook(d.id)}
                       disabled={isBooked}
                     >
@@ -867,7 +820,9 @@ export default function PatientDoctors() {
                           <FaCheckCircle /> Confirmed Appointment
                         </>
                       ) : (
-                        "Book In-Clinic Appointment"
+                        <>
+                          <FaCalendarCheck /> Book In-Clinic Visit
+                        </>
                       )}
                     </button>
                   </div>
@@ -877,92 +832,153 @@ export default function PatientDoctors() {
           )}
         </div>
       ) : (
-        /* TABLE VIEW (Preserved) */
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Specialty</th>
-              <th>Experience</th>
-              <th>Location / Distance</th>
-              <th>Mobile</th>
-              <th>Appointment</th>
-            </tr>
-          </thead>
-          <tbody>
-            {currentDoctors.map((d) => {
-              const bookedAppointment = bookedDoctors.find((b) => b.doctorId === d.id);
-              const isBooked = !!bookedAppointment;
-
-              return (
-                <tr key={d.id}>
-                  <td>Dr. {d.name}</td>
-                  <td>{d.specialty}</td>
-                  <td>{d.experience}</td>
-                  <td>
-                    {d.address || d.city || "Ahmedabad"}
-                    {d.distanceKm !== null && d.distanceKm !== undefined ? ` (📍 ${d.distanceKm} km)` : ""}
-                  </td>
-                  <td>{d.mobile}</td>
-                  <td>
-                    <input
-                      type="date"
-                      value={
-                        selectedDates[d.id] ||
-                        (bookedAppointment ? bookedAppointment.date.split("T")[0] : "")
-                      }
-                      min={new Date().toISOString().split("T")[0]}
-                      onChange={(e) => setSelectedDates({ ...selectedDates, [d.id]: e.target.value })}
-                      disabled={isBooked}
-                    />
-
-                    <input
-                      type="time"
-                      value={
-                        selectedTimes[d.id] ||
-                        (bookedAppointment?.time
-                          ? (bookedAppointment.time.includes("T")
-                            ? new Date(bookedAppointment.time).toTimeString().slice(0, 5)
-                            : bookedAppointment.time.slice(0, 5))
-                          : "")
-                      }
-                      onChange={(e) => setSelectedTimes({ ...selectedTimes, [d.id]: e.target.value })}
-                      disabled={isBooked}
-                    />
-
-                    <button
-                      className={`btn ${isBooked ? "booked" : ""}`}
-                      onClick={() => handleBook(d.id)}
-                      disabled={isBooked}
-                    >
-                      {isBooked ? "Booked" : "Book"}
-                    </button>
-                  </td>
+        /* ── TABLE VIEW ── */
+        <div className="pd-table-card">
+          <div className="pd-table-wrap">
+            <table className="pd-table">
+              <thead>
+                <tr>
+                  <th>Doctor</th>
+                  <th>Specialty</th>
+                  <th>Experience</th>
+                  <th>Location &amp; Clinic</th>
+                  <th>Contact</th>
+                  <th>Schedule Appointment</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {currentDoctors.map((d) => {
+                  const bookedAppointment = bookedDoctors.find((b) => b.doctorId === d.id);
+                  const isBooked = Boolean(bookedAppointment);
+                  const specColor = getSpecialtyColor(d.specialty);
+
+                  const selectedDate =
+                    selectedDates[d.id] ||
+                    (bookedAppointment ? bookedAppointment.date.split("T")[0] : "");
+
+                  const selectedTime =
+                    selectedTimes[d.id] ||
+                    (bookedAppointment?.time
+                      ? bookedAppointment.time.includes("T")
+                        ? new Date(bookedAppointment.time).toTimeString().slice(0, 5)
+                        : bookedAppointment.time.slice(0, 5)
+                      : "");
+
+                  return (
+                    <tr key={d.id}>
+                      <td>
+                        <div className="pd-table-doc-cell">
+                          <div
+                            className="pd-table-avatar"
+                            style={{ backgroundColor: specColor.avatar }}
+                          >
+                            {getDoctorInitials(d.name)}
+                          </div>
+                          <div>
+                            <strong className="pd-table-doc-name">Dr. {d.name}</strong>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span
+                          className="pd-doc-spec-badge"
+                          style={{
+                            backgroundColor: specColor.bg,
+                            color: specColor.text,
+                            borderColor: specColor.border,
+                          }}
+                        >
+                          {d.specialty || "General Medicine"}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="pd-table-cell-bold">
+                          {d.experience ? `${d.experience} Years` : "—"}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="pd-table-loc-block">
+                          <span>{d.clinicName || "HealthRay Clinic"}</span>
+                          <span className="pd-table-loc-sub">
+                            {d.address || d.city || "Ahmedabad"}
+                            {d.distanceKm !== null && d.distanceKm !== undefined
+                              ? ` · 📍 ${d.distanceKm} km`
+                              : ""}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="pd-table-cell-muted">{d.mobile || "—"}</span>
+                      </td>
+                      <td>
+                        <div className="pd-table-booking-inline">
+                          <input
+                            type="date"
+                            className="pd-table-input"
+                            value={selectedDate}
+                            min={getTodayDateStr()}
+                            onChange={(e) =>
+                              setSelectedDates({ ...selectedDates, [d.id]: e.target.value })
+                            }
+                            disabled={isBooked}
+                          />
+
+                          <input
+                            type="time"
+                            className="pd-table-input"
+                            min={
+                              selectedDates[d.id] === getTodayDateStr()
+                                ? getCurrentTimeStr()
+                                : undefined
+                            }
+                            value={selectedTime}
+                            onChange={(e) =>
+                              setSelectedTimes({ ...selectedTimes, [d.id]: e.target.value })
+                            }
+                            disabled={isBooked}
+                          />
+
+                          <button
+                            type="button"
+                            className={`pd-table-book-btn ${isBooked ? "confirmed" : ""}`}
+                            onClick={() => handleBook(d.id)}
+                            disabled={isBooked}
+                          >
+                            {isBooked ? "✓ Confirmed" : "Book"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
-      {/* PAGINATION */}
-      <div className="pagination">
+      {/* ── PAGINATION CONTROLS ── */}
+      <div className="pd-pagination-bar">
         <button
-          onClick={() => setCurrentPage(currentPage - 1)}
+          type="button"
+          className="pd-page-nav-btn"
+          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
           disabled={currentPage === 1}
         >
-          Previous
+          &larr; Previous
         </button>
 
-        <span>
+        <span className="pd-page-indicator-pill">
           Page {currentPage} of {totalPages}
         </span>
 
         <button
-          onClick={() => setCurrentPage(currentPage + 1)}
+          type="button"
+          className="pd-page-nav-btn"
+          onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
           disabled={currentPage === totalPages}
         >
-          Next
+          Next &rarr;
         </button>
       </div>
     </div>

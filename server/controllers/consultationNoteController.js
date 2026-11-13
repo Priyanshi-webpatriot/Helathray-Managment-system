@@ -52,21 +52,109 @@ const GEMINI_OPENAI_BASE = "https://generativelanguage.googleapis.com/v1beta/ope
 /**
  * Direct Gemini audio transcriber with model fallback and backoff retry
  */
-async function callGeminiAudioTranscription(audioBase64, mimeType) {
+async function uploadMediaToGeminiFiles(audioBuffer, mimeType, apiKey) {
+  const numBytes = audioBuffer.length;
+  const startRes = await axios.post(
+    `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`,
+    { file: { display_name: `consultation-${Date.now()}` } },
+    {
+      headers: {
+        "X-Goog-Upload-Protocol": "resumable",
+        "X-Goog-Upload-Command": "start",
+        "X-Goog-Upload-Header-Content-Length": numBytes,
+        "X-Goog-Upload-Header-Content-Type": mimeType,
+        "Content-Type": "application/json",
+      },
+      timeout: 30000,
+    }
+  );
+
+  const uploadUrl = startRes.headers["x-goog-upload-url"];
+  if (!uploadUrl) {
+    throw new Error("Failed to obtain Gemini File API upload URL");
+  }
+
+  const uploadRes = await axios.post(uploadUrl, audioBuffer, {
+    headers: {
+      "Content-Length": numBytes,
+      "X-Goog-Upload-Offset": 0,
+      "X-Goog-Upload-Command": "upload, finalize",
+    },
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+    timeout: 180000,
+  });
+
+  const fileObj = uploadRes.data?.file;
+  if (!fileObj?.uri) {
+    throw new Error("Gemini File API upload did not return a file URI");
+  }
+
+  // Wait for file to become ACTIVE if it is still PROCESSING (e.g. long video/audio)
+  let fileState = fileObj.state;
+  const fileName = fileObj.name;
+  let attempts = 0;
+  while (fileState === "PROCESSING" && attempts < 20) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const checkRes = await axios.get(
+      `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`,
+      { timeout: 15000 }
+    );
+    fileState = checkRes.data?.state;
+    attempts++;
+  }
+
+  if (fileState === "FAILED") {
+    throw new Error("Gemini File API processing failed for uploaded media");
+  }
+
+  return fileObj.uri;
+}
+
+/**
+ * Direct Gemini audio/video transcriber with model fallback, large file support, and backoff retry
+ */
+async function callGeminiAudioTranscription(audioBuffer, mimeType) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not defined in environment variables!");
   }
 
+  const useFilesApi = audioBuffer.length > 15 * 1024 * 1024;
+  let mediaPart;
+  if (useFilesApi) {
+    console.log(`📤 [Gemini Audio Transcribe] File is ${(audioBuffer.length / (1024 * 1024)).toFixed(1)} MB (>15 MB), using Gemini Files API...`);
+    const fileUri = await uploadMediaToGeminiFiles(audioBuffer, mimeType, apiKey);
+    mediaPart = {
+      file_data: {
+        mime_type: mimeType,
+        file_uri: fileUri,
+      },
+    };
+  } else {
+    mediaPart = {
+      inline_data: {
+        mime_type: mimeType,
+        data: audioBuffer.toString("base64"),
+      },
+    };
+  }
+
   let lastError = null;
   const maxPasses = 2;
+
+  // Pass 1 uses a short probe timeout — fast-fails hanging/unresponsive models
+  // Pass 2 uses the full 180s timeout for large audio on a known-working model
+  const PROBE_TIMEOUT = 25000;  // 25s — fast fail
+  const FULL_TIMEOUT  = 180000; // 180s — full audio processing
 
   for (let pass = 0; pass < maxPasses; pass++) {
     for (let i = 0; i < UNIQUE_AUDIO_MODELS.length; i++) {
       const model = UNIQUE_AUDIO_MODELS[i];
       const startTime = Date.now();
+      const timeoutMs = pass === 0 ? PROBE_TIMEOUT : FULL_TIMEOUT;
       console.log(
-        `🎙️ [Gemini Audio Transcribe] (Pass ${pass + 1}/${maxPasses}) Trying model "${model}"...`
+        `🎙️ [Gemini Audio Transcribe] (Pass ${pass + 1}/${maxPasses}) Trying model "${model}" [timeout: ${timeoutMs / 1000}s]...`
       );
 
       try {
@@ -76,18 +164,14 @@ async function callGeminiAudioTranscription(audioBase64, mimeType) {
             contents: [
               {
                 parts: [
+                  mediaPart,
                   {
-                    inline_data: {
-                      mime_type: mimeType,
-                      data: audioBase64,
-                    },
-                  },
-                  {
-                    text: `Transcribe this doctor-patient medical consultation audio recording accurately word-for-word.
+                    text: `Transcribe this doctor-patient medical consultation recording accurately word-for-word from start to finish.
 Preserve all spoken words, medical terms, medication names, dosages, and numbers exactly as spoken.
-Do not add speaker tags, speaker names, or prefixes (do NOT output "Doctor:" or "Patient:").
-If the audio is silent or unclear or contains no intelligible words, return EXACTLY: [UNCLEAR_AUDIO]
-Return ONLY the raw spoken words.`,
+Listen carefully to voice differences, pauses, and clinical context to separate Doctor and Patient turns.
+Format each speaker turn on a new line starting with "Doctor:" or "Patient:".
+Never merge a question and its answer, or a Doctor statement and Patient response, into the same line.
+If the recording is silent or unclear or contains no intelligible words, return EXACTLY: [UNCLEAR_AUDIO]`,
                   },
                 ],
               },
@@ -100,7 +184,7 @@ Return ONLY the raw spoken words.`,
             headers: { "Content-Type": "application/json" },
             maxContentLength: Infinity,
             maxBodyLength: Infinity,
-            timeout: 30000,
+            timeout: timeoutMs,
           }
         );
 
@@ -375,9 +459,15 @@ export const transcribeAudio = async (req, res) => {
       `[Transcribe] Received audio file: "${req.file.originalname}" | Mime: "${req.file.mimetype}" | Size: ${(audioBuffer.length / 1024).toFixed(1)} KB`
     );
 
-    // Normalize mimetype
-    let mimeType = req.file.mimetype || "audio/webm";
-    if (mimeType.includes("webm")) {
+    // Normalize mimetype (preserve video/* for video uploads, normalize audio/*)
+    let mimeType = (req.file.mimetype || "audio/webm").split(";")[0].trim();
+    if (mimeType === "video/webm") {
+      mimeType = "video/webm";
+    } else if (mimeType === "video/mp4") {
+      mimeType = "video/mp4";
+    } else if (mimeType.includes("quicktime")) {
+      mimeType = "video/quicktime";
+    } else if (mimeType.includes("webm")) {
       mimeType = "audio/webm";
     } else if (mimeType.includes("ogg")) {
       mimeType = "audio/ogg";
@@ -385,12 +475,11 @@ export const transcribeAudio = async (req, res) => {
       mimeType = "audio/wav";
     } else if (mimeType.includes("mp3") || mimeType.includes("mpeg")) {
       mimeType = "audio/mpeg";
+    } else if (mimeType.includes("m4a") || mimeType === "audio/mp4") {
+      mimeType = "audio/mp4";
     }
 
-    // Encode audio as base64 for Gemini inline audio input
-    const audioBase64 = audioBuffer.toString("base64");
-
-    const { text: rawTranscript, model, elapsed } = await callGeminiAudioTranscription(audioBase64, mimeType);
+    const { text: rawTranscript, model, elapsed } = await callGeminiAudioTranscription(audioBuffer, mimeType);
     const transcript = rawTranscript.trim();
 
     console.log(`[Transcribe] Raw transcript from model "${model}" (${elapsed}ms): "${transcript}"`);
@@ -418,77 +507,117 @@ export const transcribeAudio = async (req, res) => {
     }
 
     // ── STEP 1.2: DYNAMIC AI SPEAKER IDENTIFICATION (Doctor vs Patient) ──
-    let dialogue = [];
+    let dialogue = parseDialogueResponse(transcript);
     let formattedTranscript = transcript;
 
-    try {
-      console.log(`🤖 [Transcribe] Running Dynamic Gemini AI Speaker Identification (${transcript.length} chars)...`);
-      
-      // Strip any pre-existing speaker labels so Gemini evaluates purely from clinical logic without bias
-      const strippedInput = transcript
-        .replace(/(?:^|\n|\r)\s*(?:\*{1,2}|#{1,4}|\[)?\s*(Doctor|Dr\.?|Patient|Pt\.?|Caregiver|Nurse|Speaker\s*\d+)\s*(?:\*{1,2}|\])?\s*[:\-–—]?\s*(?:\*{1,2})?\s*[:\-–—]?\s*/gi, "\n")
-        .replace(/\n{2,}/g, "\n")
-        .trim();
+    if (dialogue.length >= 2) {
+      try {
+        console.log(`🔍 [Transcribe] Verifying clinical roles (Doctor vs Patient) for ${dialogue.length} audio-split turns...`);
+        const verifyPrompt = [
+          {
+            role: "system",
+            content: `You are an expert clinical medical scribe.
+Below is a JSON array of chronological dialogue turns transcribed from a doctor-patient consultation.
+The speaker labels ("Doctor" or "Patient") from audio alone may be swapped or wrong.
+Assign the TRUE clinical role ("Doctor" or "Patient") to every turn based on clinical meaning:
+- DOCTOR: Asks medical/intake questions (e.g. "What problem are you having today?", "How long have you had this?"), examines, diagnoses, gives medical advice, prescribes medicines/dosages, or confirms treatment instructions.
+- PATIENT: Describes symptoms/complaints (e.g. "My knees hurt when I walk..."), answers questions about their health/history, asks questions about their own medication/treatment.
 
-      const diarizePrompt = [
-        {
-          role: "system",
-          content: `You are an expert AI clinical medical scribe.
+CRITICAL RULES:
+1. Keep every turn's exact "text" word-for-word in the exact same order (do NOT merge, drop, or rewrite text).
+2. Output ONLY a JSON array of objects:
+[
+  { "speaker": "Doctor", "text": "..." },
+  { "speaker": "Patient", "text": "..." }
+]`,
+          },
+          {
+            role: "user",
+            content: JSON.stringify(dialogue),
+          },
+        ];
+
+        const { content: verifiedText } = await callGeminiChat({
+          messages: verifyPrompt,
+          tag: "Clinical Role Verification",
+          responseMimeType: "application/json",
+        });
+
+        const verifiedDialogue = parseDialogueResponse(verifiedText);
+        if (verifiedDialogue.length >= 2) {
+          dialogue = verifiedDialogue;
+          console.log(`✅ [Transcribe] Clinical roles verified for ${dialogue.length} turns!`);
+        }
+      } catch (verifyErr) {
+        console.warn("⚠️ [Transcribe] Clinical role verification skipped:", verifyErr.message);
+      }
+
+      formattedTranscript = dialogue
+        .map((d) => `${d.speaker}: "${d.text}"`)
+        .join("\n\n");
+    } else {
+      try {
+        console.log(`🤖 [Transcribe] Running fallback Dynamic Gemini AI Speaker Identification (${transcript.length} chars)...`);
+
+        const strippedInput = transcript
+          .replace(/(?:^|\n|\r)\s*(?:\*{1,2}|#{1,4}|\[)?\s*(Doctor|Dr\.?|Patient|Pt\.?|Caregiver|Nurse|Speaker\s*\d+)\s*(?:\*{1,2}|\])?\s*[:\-–—]?\s*(?:\*{1,2})?\s*[:\-–—]?\s*/gi, "\n")
+          .replace(/\n{2,}/g, "\n")
+          .trim();
+
+        const diarizePrompt = [
+          {
+            role: "system",
+            content: `You are an expert AI clinical medical scribe.
 Your task is to analyze this raw medical consultation dialogue between a Doctor and a Patient and separate it into chronological alternating speaker dialogue turns.
 
 CLINICAL ROLE IDENTIFICATION PRINCIPLES:
 1. DOCTOR:
    - Inquiries & Medical Questions: e.g. "How are you managing your medicines?", "What brings you in today?", "How long have you had this cough?"
-   - Clinical Directives & Examination: e.g. "Let me check your blood pressure", "Breathe in deeply."
-   - Treatment Advice & Prescriptions: e.g. "Keep a written medicine schedule and take each prescribed medicine at its instructed time.", "Take this tablet twice daily after meals."
+   - Clinical Directives, Answers to dosing questions & Prescriptions: e.g. "Take it for seven days continuous.", "Take this tablet twice daily after meals.", "Yeah, sure." (confirming patient statement)
 
 2. PATIENT:
-   - Answers to doctor's questions: e.g. "I take several medicines and sometimes forget which one comes first."
-   - Symptoms & Complaints: e.g. "My knees have been painful while walking."
-   - Personal Health & Medication History: e.g. "I am also taking Amlodipine and Metformin prescribed by my doctors."
-   - Patient Questions & Thanks: e.g. "Will this medicine cause drowsiness?", "Thank you, doctor."
+   - Symptoms & Complaints: e.g. "Hello, I have a fever.", "My knees have been painful while walking."
+   - Questions to the Doctor: e.g. "Do I need to take paracetamol for how many days?"
+   - Answers & Confirmations to Doctor: e.g. "I am taking it for 7 days.", "For sure."
 
 CRITICAL RULES:
-1. Split alternating turns cleanly. For example:
-   Doctor: "How are you managing your medicines?"
-   Patient: "I take several medicines and sometimes forget which one comes first."
-   Doctor: "For this sample conversation, keep a written medicine schedule and take each prescribed medicine at its instructed time."
-   Patient: "I am also taking Amlodipine and Metformin prescribed by my doctors."
-2. NEVER combine doctor directives and patient answers into a single card.
-3. Preserve 100% of all spoken words, drug names (e.g. Amlodipine, Metformin), and instructions.
-4. Output format:
-Return a JSON array of objects:
+1. Split alternating turns cleanly whenever a question is asked and answered, or when the topic shifts between Doctor and Patient.
+2. NEVER combine a question and its answer, or Doctor instructions and Patient responses, into a single turn.
+3. Preserve 100% of all spoken words, drug names, durations, and instructions.
+4. Return a JSON array of objects:
 [
-  { "speaker": "Doctor", "text": "..." },
-  { "speaker": "Patient", "text": "..." }
-]
-If JSON is not possible, return plain lines starting with Doctor: and Patient:.`,
-        },
-        {
-          role: "user",
-          content: `Consultation dialogue to separate:\n"${strippedInput || transcript}"`,
-        },
-      ];
+  { "speaker": "Patient", "text": "..." },
+  { "speaker": "Doctor", "text": "..." }
+]`,
+          },
+          {
+            role: "user",
+            content: `Consultation dialogue to separate:\n"${strippedInput || transcript}"`,
+          },
+        ];
 
-      const { content: diarizeText } = await callGeminiChat({
-        messages: diarizePrompt,
-        tag: "Dynamic Speaker Diarization",
-      });
+        const { content: diarizeText } = await callGeminiChat({
+          messages: diarizePrompt,
+          tag: "Dynamic Speaker Diarization",
+          responseMimeType: "application/json",
+        });
 
-      console.log(`📝 [Transcribe Diarization Raw Output]:\n${diarizeText}`);
-      dialogue = parseDialogueResponse(diarizeText);
+        console.log(`📝 [Transcribe Diarization Raw Output]:\n${diarizeText}`);
+        const fallbackDialogue = parseDialogueResponse(diarizeText);
 
-      if (dialogue.length > 0) {
-        formattedTranscript = dialogue
-          .map((d) => `${d.speaker}: "${d.text}"`)
-          .join("\n\n");
-        console.log(`✅ [Transcribe] Dynamic AI identified ${dialogue.length} Doctor & Patient turns!`);
-      } else {
+        if (fallbackDialogue.length > 0) {
+          dialogue = fallbackDialogue;
+          formattedTranscript = dialogue
+            .map((d) => `${d.speaker}: "${d.text}"`)
+            .join("\n\n");
+          console.log(`✅ [Transcribe] Fallback AI identified ${dialogue.length} Doctor & Patient turns!`);
+        } else {
+          formattedTranscript = transcript;
+        }
+      } catch (diarizeErr) {
+        console.warn("⚠️ [Transcribe] AI Diarization error:", diarizeErr.message);
         formattedTranscript = transcript;
       }
-    } catch (diarizeErr) {
-      console.warn("⚠️ [Transcribe] AI Diarization error:", diarizeErr.message);
-      formattedTranscript = transcript;
     }
 
     const totalElapsed = Date.now() - reqStart;

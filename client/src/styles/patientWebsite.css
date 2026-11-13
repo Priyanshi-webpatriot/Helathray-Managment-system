@@ -934,7 +934,7 @@
    ───────────────────────────────────────────────────────────── */
 .practo-dashboard-insights {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: 1fr;
   gap: 32px;
 }
 

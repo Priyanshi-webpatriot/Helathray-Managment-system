@@ -40,205 +40,275 @@ export default function Register() {
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card register-card">
-        {/* Medical Brand Header */}
-        <div className="auth-brand">
-          <div className="auth-brand-icon">
+    <div className="auth-page">
+
+      {/* ── LEFT BRAND PANEL ── */}
+      <div className="auth-brand-panel">
+        <div className="auth-logo-row">
+          <div className="auth-logo-box">
             <BsHospital />
           </div>
           <div>
-            <h1 className="auth-brand-title">HealthRay</h1>
-            <span className="auth-brand-badge">HMS Portal</span>
+            <p className="auth-logo-name">HealthRay</p>
+            <span className="auth-logo-sub">HMS Portal</span>
           </div>
         </div>
 
-        <div className="auth-header-text">
-          <h2>Create Account</h2>
-          <p className="auth-subtitle">Register for patient care or medical provider access</p>
-        </div>
+        <h2 className="auth-panel-headline">
+          Your Health,<br />
+          <span>Our Priority</span>
+        </h2>
+        <p className="auth-panel-desc">
+          Join HealthRay — a modern healthcare management platform for patients seeking quality care and medical professionals delivering it.
+        </p>
 
-        <div className="form-group">
-          <label className="auth-label">Account Role</label>
-          <div className="role-selector-pills">
-            <button
-              type="button"
-              className={`role-pill ${form.role === "patient" ? "active" : ""}`}
-              onClick={() => setForm({ ...form, role: "patient" })}
-            >
-              <FaUserInjured /> Patient
-            </button>
-            <button
-              type="button"
-              className={`role-pill ${form.role === "doctor" ? "active" : ""}`}
-              onClick={() => setForm({ ...form, role: "doctor" })}
-            >
-              <FaUserMd /> Doctor
-            </button>
+        <div className="auth-panel-features">
+          <div className="auth-feature-item">
+            <span className="auth-feature-dot" />
+            Book appointments with specialist doctors
           </div>
-        </div>
-
-        <div className="form-grid-two">
-          <div className="form-group">
-            <label className="auth-label">Full Name</label>
-            <input
-              placeholder="e.g. Dr. Sarah Jenkins or John Doe"
-              value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
-            />
+          <div className="auth-feature-item">
+            <span className="auth-feature-dot" />
+            Access your consultation notes anytime
           </div>
-
-          <div className="form-group">
-            <label className="auth-label">Email Address</label>
-            <input
-              type="email"
-              placeholder="name@healthcare.org"
-              value={form.email}
-              onChange={e => setForm({ ...form, email: e.target.value })}
-            />
+          <div className="auth-feature-item">
+            <span className="auth-feature-dot" />
+            AI-powered clinical SOAP note generation
           </div>
-        </div>
-
-        <div className="form-group">
-          <label className="auth-label">Password</label>
-          <input
-            type="password"
-            placeholder="Create strong account password"
-            value={form.password}
-            onChange={e => setForm({ ...form, password: e.target.value })}
-          />
-        </div>
-
-        {/* PATIENT FIELDS */}
-        {form.role === "patient" && (
-          <div className="form-grid-three">
-            <div className="form-group">
-              <label className="auth-label">Age</label>
-              <input
-                placeholder="Age"
-                type="number"
-                value={form.age}
-                onChange={e => setForm({ ...form, age: e.target.value })}
-              />
-            </div>
-            <div className="form-group">
-              <label className="auth-label">Gender</label>
-              <input
-                placeholder="Gender"
-                value={form.gender}
-                onChange={e => setForm({ ...form, gender: e.target.value })}
-              />
-            </div>
-            <div className="form-group">
-              <label className="auth-label">Emergency Contact</label>
-              <input
-                placeholder="Phone number"
-                value={form.contact}
-                onChange={e => setForm({ ...form, contact: e.target.value })}
-              />
-            </div>
+          <div className="auth-feature-item">
+            <span className="auth-feature-dot" />
+            Secure, HIPAA-compliant health records
           </div>
-        )}
-
-        {/* DOCTOR FIELDS */}
-        {form.role === "doctor" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px", marginBottom: "8px" }}>
-            <div className="form-grid-three">
-              <div className="form-group">
-                <label className="auth-label">Medical Specialty</label>
-                <input
-                  placeholder="e.g. Diabetology & Endocrinology"
-                  value={form.specialty || ""}
-                  onChange={e => setForm({ ...form, specialty: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="auth-label">Clinic / Hospital Name</label>
-                <input
-                  placeholder="e.g. ABC CLINIC"
-                  value={form.clinicName || ""}
-                  onChange={e => setForm({ ...form, clinicName: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="auth-label">Experience (Years)</label>
-                <input
-                  placeholder="e.g. 12+"
-                  type="text"
-                  value={form.experience || ""}
-                  onChange={e => setForm({ ...form, experience: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="form-grid-three">
-              <div className="form-group">
-                <label className="auth-label">City</label>
-                <input
-                  placeholder="e.g. Betul or Ahmedabad"
-                  value={form.city || ""}
-                  onChange={e => setForm({ ...form, city: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="auth-label">State</label>
-                <input
-                  placeholder="e.g. Madhya Pradesh"
-                  value={form.state || ""}
-                  onChange={e => setForm({ ...form, state: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="auth-label">Direct Mobile</label>
-                <input
-                  placeholder="+91 98765 43210"
-                  value={form.mobile || ""}
-                  onChange={e => setForm({ ...form, mobile: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="form-grid-two">
-              <div className="form-group">
-                <label className="auth-label">Full Address</label>
-                <input
-                  placeholder="e.g. Khedi Road, Near Civil Lines"
-                  value={form.address || ""}
-                  onChange={e => setForm({ ...form, address: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="auth-label">OPD Timings</label>
-                <input
-                  placeholder="e.g. 09:00 AM - 08:00 PM"
-                  value={form.timing || ""}
-                  onChange={e => setForm({ ...form, timing: e.target.value })}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        <button 
-          className="auth-submit-btn" 
-          onClick={handleRegister}
-          disabled={loading}
-        >
-          <FaUserPlus />
-          <span>{loading ? "Registering..." : "Complete Registration"}</span>
-        </button>
-
-        <div className="auth-footer-nav">
-          <p>
-            Already registered? <Link to="/">Return to Sign In</Link>
-          </p>
-        </div>
-
-        <div className="auth-security-note">
-          <BsShieldLock />
-          <span>HIPAA Compliant • Encrypted Medical Directory</span>
         </div>
       </div>
+
+      {/* ── RIGHT FORM PANEL ── */}
+      <div className="auth-form-panel">
+        <div className="auth-form-box">
+
+          <div className="auth-form-header">
+            <p className="auth-form-eyebrow">Get Started</p>
+            <h1 className="auth-form-title">Create your account</h1>
+            <p className="auth-form-subtitle">
+              Register as a patient or medical professional to get started.
+            </p>
+          </div>
+
+          {/* Role Selector */}
+          <div className="auth-role-selector">
+            <button
+              type="button"
+              className={`auth-role-btn ${form.role === "patient" ? "active" : ""}`}
+              onClick={() => setForm({ ...form, role: "patient" })}
+            >
+              <FaUserInjured />
+              Patient
+            </button>
+            <button
+              type="button"
+              className={`auth-role-btn doctor ${form.role === "doctor" ? "active" : ""}`}
+              onClick={() => setForm({ ...form, role: "doctor" })}
+            >
+              <FaUserMd />
+              Doctor
+            </button>
+          </div>
+
+          {/* Common Fields */}
+          <div className="auth-section-divider">
+            <span className="auth-section-label">Account Details</span>
+          </div>
+
+          <div className="auth-fields-stack">
+            <div className="auth-fields-grid-2">
+              <div className="auth-field">
+                <label>Full Name *</label>
+                <input
+                  className="auth-input"
+                  placeholder={form.role === "doctor" ? "Dr. Sarah Jenkins" : "John Doe"}
+                  value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                />
+              </div>
+              <div className="auth-field">
+                <label>Email Address *</label>
+                <input
+                  className="auth-input"
+                  type="email"
+                  placeholder="name@example.com"
+                  value={form.email}
+                  onChange={e => setForm({ ...form, email: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="auth-field">
+              <label>Password *</label>
+              <input
+                className="auth-input"
+                type="password"
+                placeholder="Create a strong password"
+                value={form.password}
+                onChange={e => setForm({ ...form, password: e.target.value })}
+              />
+            </div>
+          </div>
+
+          {/* PATIENT FIELDS */}
+          {form.role === "patient" && (
+            <>
+              <div className="auth-section-divider">
+                <span className="auth-section-label">Patient Details</span>
+              </div>
+              <div className="auth-fields-stack">
+                <div className="auth-fields-grid-3">
+                  <div className="auth-field">
+                    <label>Age</label>
+                    <input
+                      className="auth-input"
+                      placeholder="e.g. 28"
+                      type="number"
+                      value={form.age}
+                      onChange={e => setForm({ ...form, age: e.target.value })}
+                    />
+                  </div>
+                  <div className="auth-field">
+                    <label>Gender</label>
+                    <input
+                      className="auth-input"
+                      placeholder="Male / Female / Other"
+                      value={form.gender}
+                      onChange={e => setForm({ ...form, gender: e.target.value })}
+                    />
+                  </div>
+                  <div className="auth-field">
+                    <label>Emergency Contact</label>
+                    <input
+                      className="auth-input"
+                      placeholder="+91 98765 43210"
+                      value={form.contact}
+                      onChange={e => setForm({ ...form, contact: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* DOCTOR FIELDS */}
+          {form.role === "doctor" && (
+            <>
+              <div className="auth-section-divider">
+                <span className="auth-section-label">Professional Details</span>
+              </div>
+              <div className="auth-fields-stack">
+                <div className="auth-fields-grid-3">
+                  <div className="auth-field">
+                    <label>Medical Specialty</label>
+                    <input
+                      className="auth-input"
+                      placeholder="e.g. Cardiology"
+                      value={form.specialty || ""}
+                      onChange={e => setForm({ ...form, specialty: e.target.value })}
+                    />
+                  </div>
+                  <div className="auth-field">
+                    <label>Clinic / Hospital</label>
+                    <input
+                      className="auth-input"
+                      placeholder="e.g. ABC Clinic"
+                      value={form.clinicName || ""}
+                      onChange={e => setForm({ ...form, clinicName: e.target.value })}
+                    />
+                  </div>
+                  <div className="auth-field">
+                    <label>Experience (Years)</label>
+                    <input
+                      className="auth-input"
+                      placeholder="e.g. 12+"
+                      type="text"
+                      value={form.experience || ""}
+                      onChange={e => setForm({ ...form, experience: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="auth-fields-grid-3">
+                  <div className="auth-field">
+                    <label>City</label>
+                    <input
+                      className="auth-input"
+                      placeholder="e.g. Ahmedabad"
+                      value={form.city || ""}
+                      onChange={e => setForm({ ...form, city: e.target.value })}
+                    />
+                  </div>
+                  <div className="auth-field">
+                    <label>State</label>
+                    <input
+                      className="auth-input"
+                      placeholder="e.g. Gujarat"
+                      value={form.state || ""}
+                      onChange={e => setForm({ ...form, state: e.target.value })}
+                    />
+                  </div>
+                  <div className="auth-field">
+                    <label>Mobile Number</label>
+                    <input
+                      className="auth-input"
+                      placeholder="+91 98765 43210"
+                      value={form.mobile || ""}
+                      onChange={e => setForm({ ...form, mobile: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="auth-fields-grid-2">
+                  <div className="auth-field">
+                    <label>Full Address</label>
+                    <input
+                      className="auth-input"
+                      placeholder="e.g. Khedi Road, Near Civil Lines"
+                      value={form.address || ""}
+                      onChange={e => setForm({ ...form, address: e.target.value })}
+                    />
+                  </div>
+                  <div className="auth-field">
+                    <label>OPD Timings</label>
+                    <input
+                      className="auth-input"
+                      placeholder="e.g. 09:00 AM – 08:00 PM"
+                      value={form.timing || ""}
+                      onChange={e => setForm({ ...form, timing: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Submit */}
+          <button
+            className="auth-submit-btn"
+            onClick={handleRegister}
+            disabled={loading}
+          >
+            <FaUserPlus />
+            <span>{loading ? "Creating Account..." : "Complete Registration"}</span>
+          </button>
+
+          <div className="auth-footer-link">
+            Already have an account? <Link to="/">Sign In</Link>
+          </div>
+
+          <div className="auth-security-note">
+            <BsShieldLock />
+            <span>HIPAA Compliant · 256-bit Encrypted · Secure Medical Directory</span>
+          </div>
+
+        </div>
+      </div>
+
     </div>
   );
 }
