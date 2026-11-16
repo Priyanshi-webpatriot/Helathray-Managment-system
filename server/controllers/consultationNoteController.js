@@ -1082,3 +1082,36 @@ export const getMyPatientNotes = async (req, res) => {
     return res.status(500).json({ error: "Failed to fetch your consultation notes", detail: err.message });
   }
 };
+
+// ==========================================
+// DELETE CONSULTATION NOTE (Doctor / Admin)
+// ==========================================
+export const deleteConsultationNote = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    console.log(`🗑️ [Delete Note] Request to delete consultation note ID: ${id}`);
+
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ error: "Valid consultation note ID is required" });
+    }
+
+    const note = await prisma.consultationNote.findUnique({
+      where: { id },
+    });
+
+    if (!note) {
+      return res.status(404).json({ error: "Consultation note not found" });
+    }
+
+    await prisma.consultationNote.delete({
+      where: { id },
+    });
+
+    console.log(`✅ [Delete Note] Successfully deleted consultation note ID: ${id}`);
+    return res.json({ message: "Consultation note deleted successfully", id });
+  } catch (err) {
+    console.error("❌ [Delete Note] Error:", err.message);
+    return res.status(500).json({ error: "Failed to delete consultation note", detail: err.message });
+  }
+};
+

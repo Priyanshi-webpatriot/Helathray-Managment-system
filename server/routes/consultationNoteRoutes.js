@@ -9,6 +9,7 @@ import {
   approveConsultationNote,
   getConsultationNotes,
   getMyPatientNotes,
+  deleteConsultationNote,
 } from "../controllers/consultationNoteController.js";
 
 const router = express.Router();
@@ -38,5 +39,8 @@ router.get("/", checkRole(["doctor", "admin"]), getConsultationNotes);
 
 // Get logged-in patient's own approved notes — patient dashboard
 router.get("/my-notes", checkRole(["patient", "admin"]), getMyPatientNotes);
+
+// Delete consultation note (doctor or admin)
+router.delete("/:id", checkRole(["doctor", "admin"]), deleteConsultationNote);
 
 export default router;

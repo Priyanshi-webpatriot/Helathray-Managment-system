@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import API from "../api";
 import "../styles/chatbox.css";
 import ReactMarkdown from "react-markdown";
-import { FaFilePdf, FaTimes } from "react-icons/fa";
+import { FaTimes, FaClipboardList, FaPills, FaExclamationTriangle } from "react-icons/fa";
 import { FaUserDoctor } from "react-icons/fa6";
 import { toast } from "react-toastify";
 
@@ -11,6 +11,26 @@ export default function DoctorChatBox({ patient }) {
   const [chat, setChat] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+
+  const messagesContainerRef = useRef(null);
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = (behavior = "smooth") => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior,
+      });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      scrollToBottom("smooth");
+    }
+  }, [chat, loading, isOpen]);
 
   // =========================
   // FETCH OLD CHATS
@@ -46,11 +66,15 @@ export default function DoctorChatBox({ patient }) {
         });
       });
 
-      setChat(formattedChats);
-
-      // AUTO ANALYZE FIRST TIME
-      if (res.data.length === 0) {
-        autoAnalyzePatient();
+      if (formattedChats.length === 0) {
+        setChat([
+          {
+            type: "bot",
+            text: `Hello Doctor. I am your Clinical Assistant for **${patient.name}** (${patient.age ? `${patient.age} yrs` : "Age N/A"}, ${patient.gender || "Gender N/A"}, Blood: ${patient.bloodGroup || "N/A"}).\n\nAsk me any specific question about this patient's symptoms, medication dosages, drug interactions, or diagnostic recommendations.`,
+          },
+        ]);
+      } else {
+        setChat(formattedChats);
       }
 
     } catch (err) {
@@ -62,12 +86,12 @@ export default function DoctorChatBox({ patient }) {
   // SEND MESSAGE
   // =========================
 
-  const sendMessage = async () => {
-    if (!message.trim()) return;
+  const sendMessage = async (customMessage) => {
+    const textToSend = typeof customMessage === "string" ? customMessage : message;
+    if (!textToSend.trim()) return;
 
     const user = JSON.parse(localStorage.getItem("user"));
-
-    const currentMessage = message;
+    const currentMessage = textToSend;
 
     // INSTANT UI UPDATE
     setChat((prev) => [
@@ -91,7 +115,7 @@ export default function DoctorChatBox({ patient }) {
         {
           headers: {
             role: "doctor",
-            userid: user.id,
+            userid: user?.id,
           },
         }
       );
@@ -111,169 +135,12 @@ export default function DoctorChatBox({ patient }) {
         ...prev,
         {
           type: "bot",
-          text: "AI failed...",
+          text: "I encountered an error retrieving that information. Please try asking again.",
         },
       ]);
     }
 
     setLoading(false);
-  };
-
-  // =========================
-  // AUTO PATIENT ANALYSIS
-  // =========================
-
-  const autoAnalyzePatient = async () => {
-    if (!patient?.id) return;
-
-    const user = JSON.parse(localStorage.getItem("user"));
-
-    setLoading(true);
-
-    setChat((prev) => [
-      ...prev,
-      {
-        type: "user",
-        text: `Analyze patient: ${patient.name}`,
-      },
-    ]);
-
-    try {
-      const res = await API.post(
-        "/chat/doctor",
-        {
-          message: `
-Provide a professional clinical assessment for this patient.
-Include observations, preventive advice, risk evaluation, and follow-up recommendations.
-Avoid mentioning missing information.
-`,
-          patient,
-        },
-        {
-          headers: {
-            role: "doctor",
-            userid: user.id,
-          },
-        }
-      );
-
-      setChat((prev) => [
-        ...prev,
-        {
-          type: "bot",
-          text: res.data.reply,
-        },
-      ]);
-
-    } catch (err) {
-      console.log(err);
-
-      setChat((prev) => [
-        ...prev,
-        {
-          type: "bot",
-          text: "AI analysis failed...",
-        },
-      ]);
-    }
-
-    setLoading(false);
-  };
-
-  // =========================
-  // SAVE MEDICAL RECORD
-  // =========================
-
-  const saveMedicalRecord = async () => {
-    try {
-      const user = JSON.parse(localStorage.getItem("user"));
-
-      await API.post(
-        "/chat/doctor/PDF-report",
-        { patient },
-        {
-          headers: {
-            role: "doctor",
-            userid: user.id,
-          },
-        }
-      );
-
-      toast.success("Medical Record Saved successfully!");
-
-    } catch (err) {
-      console.log(err);
-
-      toast.error(err.response?.data?.error || "Failed to save medical record");
-    }
-  };
-
-  // =========================
-  // GENERATE PDF REPORT
-  // =========================
-
-  const generateReport = async () => {
-    try {
-      const user = JSON.parse(localStorage.getItem("user"));
-
-      // STEP 1: GET AI REPORT
-      const reportRes = await API.post(
-        "/chat/doctor/PDF-report",
-        { patient },
-        {
-          headers: {
-            role: "doctor",
-            userid: user.id,
-          },
-        }
-      );
-
-      // STEP 2: ADD PATIENT INFO
-      const report = {
-        ...reportRes.data,
-
-        patientName: patient.name,
-        age: patient.age,
-        gender: patient.gender,
-        bloodGroup: patient.bloodGroup,
-        status: patient.status,
-      };
-
-      // STEP 3: GENERATE PDF
-      const pdfRes = await API.post(
-        "/medical-records/doctor/report/pdf",
-        report,
-        {
-          responseType: "blob",
-        }
-      );
-
-      // STEP 4: DOWNLOAD PDF
-      const url = window.URL.createObjectURL(
-        new Blob([pdfRes.data])
-      );
-
-      const link = document.createElement("a");
-
-      link.href = url;
-
-      link.setAttribute(
-        "download",
-        `medical-report-${patient.name}.pdf`
-      );
-
-      document.body.appendChild(link);
-
-      link.click();
-
-      link.remove();
-      toast.success("PDF report generated and downloaded!");
-
-    } catch (err) {
-      console.log(err);
-
-      toast.error(err.response?.data?.error || "Failed to generate PDF report");
-    }
   };
 
   // =========================
@@ -314,7 +181,10 @@ Avoid mentioning missing information.
           {/* HEADER */}
 
           <div className="doctor-ai-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Doctor AI Assistant</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <FaUserDoctor style={{ fontSize: "16px" }} />
+              <span>AI Assistant · {patient?.name}</span>
+            </div>
             <button
               type="button"
               onClick={() => setIsOpen(false)}
@@ -337,20 +207,9 @@ Avoid mentioning missing information.
             </button>
           </div>
 
-          {/* ACTION BUTTONS */}
-
-          <div className="action-buttons">
-            <button
-              className="action-btn pdf-btn"
-              onClick={generateReport}
-            >
-              <FaFilePdf /> Save PDF
-            </button>
-          </div>
-
           {/* MESSAGES */}
 
-          <div className="messages">
+          <div className="messages" ref={messagesContainerRef}>
             {chat.map((c, i) => (
               <div
                 key={i}
@@ -364,9 +223,77 @@ Avoid mentioning missing information.
 
             {loading && (
               <div className="msg bot">
-                Analyzing patient...
+                Thinking and reviewing clinical data...
               </div>
             )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* QUICK SUGGESTION PROMPTS */}
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", padding: "8px 12px", background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
+            <button
+              type="button"
+              onClick={() => sendMessage(`Summarize ${patient?.name}'s current medical status and known vitals.`)}
+              disabled={loading}
+              style={{
+                fontSize: "11px",
+                fontWeight: "600",
+                padding: "5px 10px",
+                background: "#ffffff",
+                border: "1px solid #cbd5e1",
+                borderRadius: "12px",
+                cursor: "pointer",
+                color: "#0369a1",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <FaClipboardList style={{ fontSize: "11px", color: "#0284c7" }} />
+              <span>Patient Summary</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => sendMessage(`What medications or treatments are clinically suggested for ${patient?.name}?`)}
+              disabled={loading}
+              style={{
+                fontSize: "11px",
+                fontWeight: "600",
+                padding: "5px 10px",
+                background: "#ffffff",
+                border: "1px solid #cbd5e1",
+                borderRadius: "12px",
+                cursor: "pointer",
+                color: "#0369a1",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <FaPills style={{ fontSize: "11px", color: "#e11d48" }} />
+              <span>Suggested Rx</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => sendMessage(`Are there any potential drug interactions, contraindications, or red flags for ${patient?.name}?`)}
+              disabled={loading}
+              style={{
+                fontSize: "11px",
+                fontWeight: "600",
+                padding: "5px 10px",
+                background: "#ffffff",
+                border: "1px solid #cbd5e1",
+                borderRadius: "12px",
+                cursor: "pointer",
+                color: "#0369a1",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <FaExclamationTriangle style={{ fontSize: "11px", color: "#d97706" }} />
+              <span>Contraindications</span>
+            </button>
           </div>
 
           {/* INPUT AREA */}
@@ -377,13 +304,13 @@ Avoid mentioning missing information.
               onChange={(e) =>
                 setMessage(e.target.value)
               }
-              placeholder="Ask AI about patient..."
+              placeholder={`Ask a medical or clinical question about ${patient?.name || "patient"}...`}
               onKeyDown={(e) =>
                 e.key === "Enter" && sendMessage()
               }
             />
 
-            <button onClick={sendMessage}>
+            <button onClick={() => sendMessage()} disabled={loading}>
               Send
             </button>
           </div>

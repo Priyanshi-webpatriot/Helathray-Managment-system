@@ -34,6 +34,8 @@ import {
   FaSearchMinus,
   FaMapMarkerAlt,
   FaCalendarCheck,
+  FaChevronLeft,
+  FaChevronRight,
 } from "react-icons/fa";
 
 export default function PatientDoctors() {
@@ -799,7 +801,7 @@ export default function PatientDoctors() {
 
                           {d.distanceKm !== null && d.distanceKm !== undefined && (
                             <div className="pd-distance-pill">
-                              <span>📍 {d.distanceKm} km away</span>
+                              <span><FaMapMarkerAlt style={{ marginRight: 4 }} />{d.distanceKm} km away</span>
                             </div>
                           )}
 
@@ -1047,7 +1049,7 @@ export default function PatientDoctors() {
                 className="pd-modal-close-btn"
                 onClick={() => !isSubmittingModal && setModalDoctor(null)}
               >
-                &times;
+                <FaTimes />
               </button>
             </div>
 
@@ -1144,7 +1146,7 @@ export default function PatientDoctors() {
           onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
           disabled={currentPage === 1}
         >
-          &larr; Previous
+          <FaChevronLeft style={{ marginRight: 6 }} /> Previous
         </button>
 
         <span className="pd-page-indicator-pill">
@@ -1157,7 +1159,7 @@ export default function PatientDoctors() {
           onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
           disabled={currentPage === totalPages}
         >
-          Next &rarr;
+          Next <FaChevronRight style={{ marginLeft: 6 }} />
         </button>
       </div>
     </div>

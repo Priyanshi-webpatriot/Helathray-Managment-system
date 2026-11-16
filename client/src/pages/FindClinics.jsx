@@ -506,7 +506,14 @@ export default function FindClinics() {
                   <div className="info-card-icon"><FaStar style={{ color: "#f59e0b" }} /></div>
                   <div>
                     <span className="info-card-label">Patient Rating</span>
-                    <strong className="info-card-val">{activeClinic.rating} ★★★★★</strong>
+                    <strong className="info-card-val" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      {activeClinic.rating}
+                      <span style={{ color: "#f59e0b", display: "inline-flex", gap: "2px", fontSize: "12px" }}>
+                        {[...Array(5)].map((_, i) => (
+                          <FaStar key={i} />
+                        ))}
+                      </span>
+                    </strong>
                   </div>
                 </div>
 

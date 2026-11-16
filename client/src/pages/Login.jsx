@@ -2,7 +2,7 @@ import { useState } from "react";
 import API from "../api";
 import "../styles/auth.css";
 import { BsHospital, BsShieldLock } from "react-icons/bs";
-import { FaLock, FaEnvelope, FaSignInAlt, FaUserInjured, FaUserMd } from "react-icons/fa";
+import { FaLock, FaEnvelope, FaSignInAlt, FaUserInjured, FaUserMd, FaExclamationCircle } from "react-icons/fa";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 
@@ -130,8 +130,8 @@ export default function Login() {
                 onKeyDown={(e) => { if (e.key === "Enter") handleLogin(); }}
               />
               {errors.email && (
-                <span style={{ fontSize: 12, color: "#ef4444", fontWeight: 600 }}>
-                  ⚠ {errors.email}
+                <span style={{ fontSize: 12, color: "#ef4444", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <FaExclamationCircle style={{ fontSize: 11 }} /> {errors.email}
                 </span>
               )}
             </div>
@@ -154,8 +154,8 @@ export default function Login() {
                 onKeyDown={(e) => { if (e.key === "Enter") handleLogin(); }}
               />
               {errors.password && (
-                <span style={{ fontSize: 12, color: "#ef4444", fontWeight: 600 }}>
-                  ⚠ {errors.password}
+                <span style={{ fontSize: 12, color: "#ef4444", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <FaExclamationCircle style={{ fontSize: 11 }} /> {errors.password}
                 </span>
               )}
             </div>

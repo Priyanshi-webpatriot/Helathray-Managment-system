@@ -122,6 +122,7 @@ export const doctorAIChat = async (req, res) => {
         role: "system",
         content: `
           You are a senior clinical doctor assistant helping real doctors.
+You are an intelligent clinical AI assistant supporting an attending doctor in their OPD and clinic practice.
 
           STRICT RESPONSE RULES:
           - Respond like an experienced doctor
@@ -149,6 +150,16 @@ export const doctorAIChat = async (req, res) => {
           ## Follow-up
           - Point
           - Point
+COMMUNICATION GUIDELINES:
+- Answer whatever question the doctor asks directly, normally, and professionally.
+- Match the doctor's query:
+  - If the doctor sends a greeting (e.g. "hi", "hello"), reply cordially and offer help regarding the active patient.
+  - If the doctor asks a specific question (e.g. about medication, dosage, symptoms, drug interactions, or tests), answer that question directly, clearly, and concisely without dumping unrelated sections.
+  - If the doctor asks for a full patient analysis or assessment, provide a well-structured summary.
+- NEVER force a rigid template with "Clinical Assessment / Observations / Recommendations / Follow-up" unless explicitly requested by the doctor.
+- Base your answers on the provided patient profile and medical records whenever available.
+- Keep tone professional, evidence-based, collaborative, and clinical (like an experienced medical colleague).
+- Use clean, concise markdown formatting (bullet points, bold text) where appropriate.
         `,
       },
       ...history,
@@ -156,6 +167,8 @@ export const doctorAIChat = async (req, res) => {
         role: "user",
         content: `
           Doctor Message: ${message}
+Doctor's Message:
+"${message}"
 
           Patient Info:
           Name: ${patient?.name}
@@ -163,11 +176,21 @@ export const doctorAIChat = async (req, res) => {
           Gender: ${patient?.gender}
           Blood Group: ${patient?.bloodGroup}
           Status: ${patient?.status}
+Active Patient Context:
+- Name: ${patient?.name || "Patient"}
+- Age: ${patient?.age ? `${patient.age} years` : "Not specified"}
+- Gender: ${patient?.gender || "Not specified"}
+- Blood Group: ${patient?.bloodGroup || "Not specified"}
+- Clinical Status: ${patient?.status || "ACTIVE"}
+- Current Notes / Chief Complaint: ${patient?.medicalNotes || "None"}
+- Past Medical Record / Vitals:
+${record ? JSON.stringify(record, null, 2) : "No prior recorded EHR history"}
 
           Medical Record:
           ${record ? JSON.stringify(record) : "No medical record available"}
 
           Provide a professional doctor-style clinical assessment.
+Respond to the doctor's message directly and clinically.
         `,
       },
     ];

@@ -6,7 +6,7 @@ import {
   BsCalendar2Check, BsCalendarCheck, BsClock, BsInbox,
 } from "react-icons/bs";
 import {
-  FaArrowLeft, FaChevronLeft, FaChevronRight, FaUserMd, FaUserInjured,
+  FaArrowLeft, FaChevronLeft, FaChevronRight, FaUserMd, FaUserInjured, FaExclamationCircle,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 
@@ -192,7 +192,7 @@ export default function Appointments() {
                 ))}
               </select>
               {errors.patientId && (
-                <span className="appt-field-error">⚠ {errors.patientId}</span>
+                <span className="appt-field-error"><FaExclamationCircle style={{ marginRight: 4, fontSize: 11 }} />{errors.patientId}</span>
               )}
             </div>
           )}
@@ -218,7 +218,7 @@ export default function Appointments() {
               ))}
             </select>
             {errors.doctorId && (
-              <span className="appt-field-error">⚠ {errors.doctorId}</span>
+              <span className="appt-field-error"><FaExclamationCircle style={{ marginRight: 4, fontSize: 11 }} />{errors.doctorId}</span>
             )}
           </div>
 
@@ -238,7 +238,7 @@ export default function Appointments() {
               }}
             />
             {errors.date && (
-              <span className="appt-field-error">⚠ {errors.date}</span>
+              <span className="appt-field-error"><FaExclamationCircle style={{ marginRight: 4, fontSize: 11 }} />{errors.date}</span>
             )}
           </div>
 
@@ -258,7 +258,7 @@ export default function Appointments() {
               }}
             />
             {errors.time && (
-              <span className="appt-field-error">⚠ {errors.time}</span>
+              <span className="appt-field-error"><FaExclamationCircle style={{ marginRight: 4, fontSize: 11 }} />{errors.time}</span>
             )}
           </div>
         </div>

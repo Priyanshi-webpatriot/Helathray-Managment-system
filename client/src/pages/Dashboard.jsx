@@ -7,7 +7,8 @@ import {
   FaSearch, FaMapMarkerAlt, FaNotesMedical, FaStar, FaPhoneAlt, FaCheckCircle,
   FaTooth, FaBone, FaBrain, FaCapsules, FaStethoscope, FaUserFriends, FaRegCheckCircle,
   FaThermometerHalf, FaBaby, FaPumpSoap, FaFemale, FaShieldAlt, FaBolt, FaComments,
-  FaLock, FaBirthdayCake, FaVenusMars, FaUser, FaEnvelope, FaTint, FaIdCard, FaEdit
+  FaLock, FaBirthdayCake, FaVenusMars, FaUser, FaEnvelope, FaTint, FaIdCard, FaEdit,
+  FaTimes
 } from "react-icons/fa";
 import { 
   BsShieldLock, 
@@ -817,7 +818,7 @@ export default function Dashboard() {
                   onClick={() => setIsEditModalOpen(false)}
                   disabled={profileSaving}
                 >
-                  ✕
+                  <FaTimes />
                 </button>
               </div>
 

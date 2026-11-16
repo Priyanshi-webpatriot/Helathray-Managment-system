@@ -138,7 +138,6 @@ export default function ConsultationNote({ patient }) {
   const [audioBlob, setAudioBlob] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
   const [uploadedFileName, setUploadedFileName] = useState("");
-  const [includeSystemAudio, setIncludeSystemAudio] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
 
   // AI & Note State
@@ -156,6 +155,8 @@ export default function ConsultationNote({ patient }) {
   // Past Notes
   const [pastNotes, setPastNotes] = useState([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   // Media references
   const mediaRecorderRef = useRef(null);
@@ -288,44 +289,11 @@ export default function ConsultationNote({ patient }) {
   // ── RECORDING CONTROLS ──
   const startRecording = async () => {
     try {
-      console.log(" [AI Note Writer] Requesting microphone access...");
+      console.log("🎙️ [AI Note Writer] Requesting microphone access...");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      let combinedStream = stream;
-
-      // Optional: system / tab audio
-      if (includeSystemAudio) {
-        try {
-          console.log("🖥️ [AI Note Writer] Requesting screen/tab audio...");
-          const displayStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { width: 1, height: 1, frameRate: 1 },
-            audio: true,
-          });
-          displayStreamRef.current = displayStream;
-
-          if (displayStream.getAudioTracks().length > 0) {
-            const AudioCtx = window.AudioContext || window.webkitAudioContext;
-            const audioCtx = new AudioCtx();
-            if (audioCtx.state === "suspended") await audioCtx.resume();
-            audioContextRef.current = audioCtx;
-
-            const micSource = audioCtx.createMediaStreamSource(stream);
-            const tabSource = audioCtx.createMediaStreamSource(displayStream);
-            const destination = audioCtx.createMediaStreamDestination();
-
-            micSource.connect(destination);
-            tabSource.connect(destination);
-            combinedStream = destination.stream;
-            console.log(" [AI Note Writer] Combined microphone and tab audio into one stream");
-          } else {
-            console.warn(" [AI Note Writer] No audio track detected in display media");
-            toast.warning("No audio track detected in the shared screen/tab. Please make sure to check 'Share tab audio' in the browser sharing prompt.");
-          }
-        } catch (err) {
-          console.warn(" [AI Note Writer] Display audio recording skipped or denied:", err.message);
-        }
-      }
+      const combinedStream = stream;
 
       // Detect supported mimeType
       let mimeType = "audio/webm;codecs=opus";
@@ -863,6 +831,24 @@ export default function ConsultationNote({ patient }) {
     }
   };
 
+  const executeDeleteNote = async (noteId) => {
+    setDeletingNoteId(noteId);
+    try {
+      await API.delete(`/consultation-notes/${noteId}`, {
+        headers: { role: user.role || "doctor", userid: user.id },
+      });
+      toast.success("Consultation note deleted successfully!");
+      setPastNotes((prev) => prev.filter((n) => n.id !== noteId));
+      setConfirmDeleteId(null);
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message;
+      console.error("Failed to delete note:", err);
+      toast.error(`Failed to delete note: ${msg}`);
+    } finally {
+      setDeletingNoteId(null);
+    }
+  };
+
   const parseNote = (note) => {
     try {
       return JSON.parse(note);
@@ -1125,22 +1111,6 @@ export default function ConsultationNote({ patient }) {
                                     : "Speak naturally. Pause or Stop anytime."
                                   : "Click Start to record the doctor-patient conversation using your microphone."}
                               </div>
-
-                              {!isRecording && (
-                                <div className="system-audio-toggle" style={{ marginTop: "16px" }}>
-                                  <label className="toggle-switch">
-                                    <input
-                                      type="checkbox"
-                                      checked={includeSystemAudio}
-                                      onChange={(e) => setIncludeSystemAudio(e.target.checked)}
-                                    />
-                                    <span className="slider round"></span>
-                                  </label>
-                                  <span className="toggle-label">
-                                    Include system/tab audio
-                                  </span>
-                                </div>
-                              )}
                             </div>
 
                             {/* Drag & Drop Upload Card */}
@@ -1498,7 +1468,9 @@ export default function ConsultationNote({ patient }) {
                             </div>
                             <div className="cn-success-meta-item">
                               <span className="cn-meta-lbl">Patient Summary</span>
-                              <span className="cn-status-pill-blue">✓ Synced to Portal</span>
+                              <span className="cn-status-pill-blue">
+                                <FaCheckCircle style={{ marginRight: 4, fontSize: 11 }} /> Synced to Portal
+                              </span>
                             </div>
                           </div>
 
@@ -1613,30 +1585,68 @@ export default function ConsultationNote({ patient }) {
                       const isApproved = note.status === "APPROVED";
                       return (
                         <div key={note.id} className="past-note-card">
-                          <div className="past-note-meta">
-                            <span className="past-note-date">
-                              {" "}
-                              {new Date(note.createdAt).toLocaleString("en-IN", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                              {note.doctor?.name && ` · Dr. ${note.doctor.name}`}
-                            </span>
-                            <span className={`note-status-badge ${isApproved ? "approved" : "draft"}`}>
-                              {isApproved ? (
-                                <>
-                                  <FaCheckCircle style={{ marginRight: 4 }} /> Approved
-                                </>
-                              ) : (
-                                <>
-                                  <FaFileAlt style={{ marginRight: 4 }} /> Draft
-                                </>
-                              )}
-                            </span>
-                          </div>
+                          {confirmDeleteId === note.id ? (
+                            <div className="past-note-inline-confirm">
+                              <div className="past-note-confirm-content">
+                                <FaExclamationTriangle style={{ color: "#dc2626", flexShrink: 0 }} />
+                                <span>Are you sure you want to delete this consultation note?</span>
+                              </div>
+                              <div className="past-note-confirm-btns">
+                                <button
+                                  type="button"
+                                  className="past-note-cancel-btn"
+                                  onClick={() => setConfirmDeleteId(null)}
+                                  disabled={deletingNoteId === note.id}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  className="past-note-confirm-btn"
+                                  onClick={() => executeDeleteNote(note.id)}
+                                  disabled={deletingNoteId === note.id}
+                                >
+                                  {deletingNoteId === note.id ? "Deleting..." : "Delete"}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="past-note-meta">
+                              <span className="past-note-date">
+                                {" "}
+                                {new Date(note.createdAt).toLocaleString("en-IN", {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                                {note.doctor?.name && ` · Dr. ${note.doctor.name}`}
+                              </span>
+                              <div className="past-note-actions-wrap">
+                                <span className={`note-status-badge ${isApproved ? "approved" : "draft"}`}>
+                                  {isApproved ? (
+                                    <>
+                                      <FaCheckCircle style={{ marginRight: 4 }} /> Approved
+                                    </>
+                                  ) : (
+                                    <>
+                                      <FaFileAlt style={{ marginRight: 4 }} /> Draft
+                                    </>
+                                  )}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="past-note-delete-btn"
+                                  title="Delete this consultation note"
+                                  onClick={() => setConfirmDeleteId(note.id)}
+                                >
+                                  <FaTrash style={{ marginRight: 5, fontSize: "11px" }} />
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          )}
 
                           {parsed ? (
                             <SoapNoteCard data={parsed} editable={false} onChange={() => {}} />
