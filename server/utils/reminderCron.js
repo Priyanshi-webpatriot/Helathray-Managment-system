@@ -131,7 +131,7 @@ export const processReminders = async () => {
                         const patientEmail = appointment.patient?.user?.email;
                         if (patientEmail) {
                             // Generate Calendar Invite (.ics) and 1-Click Google Calendar Link (PATIENTS ONLY)
-                            const clinicName = appointment.doctor?.clinicName || "HealthRay Clinic";
+                            const clinicName = appointment.doctor?.clinicName || "CareScribe Clinic";
                             const clinicLocation = appointment.doctor?.address || appointment.doctor?.city || "Consultation Clinic";
                             const fullLocation = `${clinicName}, ${clinicLocation}`;
 
@@ -148,7 +148,7 @@ export const processReminders = async () => {
                                 location: fullLocation,
                                 startDate,
                                 endDate,
-                                organizerName: "HealthRay HMS",
+                                organizerName: "CareScribe",
                                 organizerEmail: process.env.EMAIL_USER,
                                 attendeeName: patientName,
                                 attendeeEmail: patientEmail,
@@ -156,7 +156,7 @@ export const processReminders = async () => {
 
                             const googleCalendarUrl = buildGoogleCalendarLink({
                                 title: `Doctor Appointment - Dr. ${doctorName.replace(/^Dr\.\s*/i, "")} (${specialty})`,
-                                description: `In-clinic doctor consultation scheduled via HealthRay HMS.\nDoctor: Dr. ${doctorName.replace(/^Dr\.\s*/i, "")}\nSpecialty: ${specialty}\nClinic: ${fullLocation}\nTime: ${time}`,
+                                description: `In-clinic doctor consultation scheduled via CareScribe.\nDoctor: Dr. ${doctorName.replace(/^Dr\.\s*/i, "")}\nSpecialty: ${specialty}\nClinic: ${fullLocation}\nTime: ${time}`,
                                 location: fullLocation,
                                 startDate,
                                 endDate,
@@ -164,7 +164,7 @@ export const processReminders = async () => {
 
                             const isSent = await sendEmail({
                                 to: patientEmail,
-                                subject: "Appointment Reminder - HealthRay HMS",
+                                subject: "Appointment Reminder - CareScribe",
                                 text: patientMessage,
                                 recipientName: patientName,
                                 role: "patient",
@@ -277,7 +277,7 @@ export const processReminders = async () => {
                         if (doctorEmail) {
                             const isSent = await sendEmail({
                                 to: doctorEmail,
-                                subject: "Patient Appointment Reminder - HealthRay HMS",
+                                subject: "Patient Appointment Reminder - CareScribe",
                                 text: doctorMessage,
                                 recipientName: `Dr. ${doctorName.replace(/^Dr\.\s*/i, "")}`,
                                 role: "doctor",

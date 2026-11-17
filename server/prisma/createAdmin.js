@@ -5,7 +5,7 @@ import "../env.js";
 import bcrypt from "bcrypt";
 import prisma from "./client.js";
 
-const ADMIN_EMAIL    = "admin@healthray.com";
+const ADMIN_EMAIL    = "admin@carescribe.com";
 const ADMIN_PASSWORD = "Admin@1234";      // ← Change this before running!
 const ADMIN_NAME     = "Super Admin";
 

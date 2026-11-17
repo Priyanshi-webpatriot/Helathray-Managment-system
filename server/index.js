@@ -14,7 +14,8 @@ import reminderRoutes from "./routes/reminderRoutes.js";
 import consultationNoteRoutes from "./routes/consultationNoteRoutes.js";
 
 const app = express();
-const JWT_SECRET = process.env.JWT_SECRET || "healthray_jwt_secret_key";
+app.set("etag", false); // Disables 304 ETag caching so APIs always return fresh 200 OK
+const JWT_SECRET = process.env.JWT_SECRET || "carescribe_jwt_secret_key";
 
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
@@ -81,7 +82,7 @@ app.use((err, req, res, next) => {
   }
 });
 
-console.log("Starting HealthRay HMS server...");
+console.log("Starting CareScribe server...");
 
 app.listen(3360, () => {
   console.log("🚀 Server is running on: http://localhost:3360");

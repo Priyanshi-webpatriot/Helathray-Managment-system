@@ -1003,9 +1003,63 @@ Rewrite this as a friendly, reassuring summary for the patient. Return plain tex
       },
     });
 
+    // --- Sync & Store into MedicalRecord table ---
+    let createdRecord = null;
+    try {
+      let parsedData = null;
+      try {
+        parsedData = typeof finalNote === "string" ? JSON.parse(finalNote) : finalNote;
+      } catch {
+        parsedData = null;
+      }
+
+      const symptoms = parsedData?.what_patient_said || parsedData?.symptoms || existingNote?.transcript || null;
+      const diagnosis = parsedData?.likely_diagnosis || parsedData?.diagnosis || "Consultation Clinical Assessment";
+      const vitals = parsedData?.what_was_observed || parsedData?.vitals || null;
+      const prescription = parsedData?.medications || parsedData?.prescription || null;
+      const notes = parsedData?.quick_summary || parsedData?.notes || formattedPatientNote || null;
+      const riskLevel = existingNote?.patient?.status || "ACTIVE";
+      const redFlags = parsedData?.warning_signs ? JSON.stringify(parsedData.warning_signs) : null;
+      const recommendations = parsedData
+        ? [parsedData.treatment_plan, parsedData.follow_up].filter(Boolean).join("\n\nFollow-up: ")
+        : null;
+
+      createdRecord = await prisma.medicalRecord.create({
+        data: {
+          patientId: existingNote.patientId,
+          symptoms,
+          diagnosis,
+          vitals,
+          prescription,
+          notes,
+          riskLevel,
+          redFlags,
+          recommendations,
+        },
+      });
+
+      console.log(`✅ [Approve Note] MedicalRecord #${createdRecord.id} successfully saved to MedicalRecord table for patient #${existingNote.patientId}`);
+
+      // Also update patient's medicalNotes for quick directory overview
+      if (diagnosis || notes) {
+        await prisma.patient.update({
+          where: { id: existingNote.patientId },
+          data: {
+            medicalNotes: notes || diagnosis,
+          },
+        });
+      }
+    } catch (mrErr) {
+      console.error("❌ [Approve Note] Failed to store MedicalRecord:", mrErr.message);
+    }
+
     const totalElapsed = Date.now() - reqStart;
     console.log(`🎉 [Approve Note] Note #${noteId} successfully APPROVED and saved in ${totalElapsed}ms`);
-    return res.json({ note, message: "Consultation note approved and saved successfully." });
+    return res.json({
+      note,
+      medicalRecord: createdRecord,
+      message: "Consultation note approved and saved successfully to EHR & Medical Records.",
+    });
   } catch (err) {
     console.error("❌ [Approve Note] Error:", err.message);
     return res.status(500).json({ error: "Failed to approve note", detail: err.message });

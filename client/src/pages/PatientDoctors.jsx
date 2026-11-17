@@ -263,7 +263,7 @@ export default function PatientDoctors() {
         Name: `Dr. ${d.name}`,
         Specialty: d.specialty || "General Medicine",
         Experience: d.experience ? `${d.experience} Years` : "—",
-        Clinic: d.clinicName || "HealthRay Clinic",
+        Clinic: d.clinicName || "CareScribe Clinic",
         City: d.city || "—",
         Mobile: d.mobile || "—",
         Status: bookedAppointment ? "Booked" : "Available",
@@ -292,7 +292,7 @@ export default function PatientDoctors() {
   const downloadPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(16);
-    doc.text("HealthRay — Available Doctors Directory", 14, 18);
+    doc.text("CareScribe — Available Doctors Directory", 14, 18);
     doc.setFontSize(10);
     doc.text(`Generated on ${new Date().toLocaleDateString("en-IN")}`, 14, 25);
 
@@ -370,7 +370,7 @@ export default function PatientDoctors() {
 
   const makeGoogleCalendarUrl = (doc, bookedDate, bookedTime) => {
     const title = `Doctor Appointment - Dr. ${doc.name} (${doc.specialty || "General Medicine"})`;
-    const location = `${doc.clinicName || "HealthRay Clinic"}, ${doc.address || doc.city || "Ahmedabad"}`;
+    const location = `${doc.clinicName || "CareScribe Clinic"}, ${doc.address || doc.city || "Ahmedabad"}`;
     const details = `Medical Consultation with Dr. ${doc.name}.\nSpecialty: ${doc.specialty || "General Medicine"}\nClinic: ${location}\nScheduled Time: ${bookedTime || "Scheduled Time"}`;
 
     const dateStr = (bookedDate || "").split("T")[0];
@@ -791,7 +791,7 @@ export default function PatientDoctors() {
 
                           <div className="pd-meta-item">
                             <FaHospital className="pd-meta-icon hospital" />
-                            <span>{d.clinicName || "HealthRay Clinic"}</span>
+                            <span>{d.clinicName || "CareScribe Clinic"}</span>
                           </div>
 
                           <div className="pd-meta-item">
@@ -979,7 +979,7 @@ export default function PatientDoctors() {
                       </td>
                       <td>
                         <div className="pd-table-loc-block">
-                          <strong className="pd-table-clinic-name">{d.clinicName || "HealthRay Clinic"}</strong>
+                          <strong className="pd-table-clinic-name">{d.clinicName || "CareScribe Clinic"}</strong>
                           <span className="pd-table-loc-sub">
                             <FaMapMarkerAlt className="loc-pin-icon" />
                             {d.address || d.city || "Ahmedabad"}
@@ -1067,7 +1067,7 @@ export default function PatientDoctors() {
                   {modalDoctor.specialty || "General Medicine"}
                 </span>
                 <p className="pd-modal-clinic">
-                  <FaMapMarkerAlt /> {modalDoctor.clinicName || "HealthRay Clinic"}, {modalDoctor.city || "Ahmedabad"}
+                  <FaMapMarkerAlt /> {modalDoctor.clinicName || "CareScribe Clinic"}, {modalDoctor.city || "Ahmedabad"}
                 </p>
               </div>
             </div>

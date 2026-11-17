@@ -38,7 +38,7 @@ export const buildIcsCalendarEvent = ({
   location,
   startDate,
   endDate,
-  organizerName = "HealthRay HMS",
+  organizerName = "CareScribe",
   organizerEmail,
   attendeeName = "Patient",
   attendeeEmail,
@@ -46,7 +46,7 @@ export const buildIcsCalendarEvent = ({
   const nowUtc = formatToIcsDate(new Date());
   const startUtc = formatToIcsDate(startDate);
   const endUtc = formatToIcsDate(endDate);
-  const uid = `appointment-${appointmentId || Date.now()}@healthray.com`;
+  const uid = `appointment-${appointmentId || Date.now()}@carescribe.com`;
 
   // Clean strings for ICS (escape commas, semicolons, backslashes and remove raw newlines)
   const cleanSummary = (title || "Medical Consultation").replace(/[\\;,]/g, " ");
@@ -55,14 +55,14 @@ export const buildIcsCalendarEvent = ({
     .replace(/;/g, "\\;")
     .replace(/,/g, "\\,")
     .replace(/\r?\n/g, "\\n");
-  const cleanLoc = (location || "HealthRay Clinic").replace(/[\\;,]/g, " ");
+  const cleanLoc = (location || "CareScribe Clinic").replace(/[\\;,]/g, " ");
 
-  const orgEmail = organizerEmail || process.env.EMAIL_USER || "no-reply@healthray.com";
+  const orgEmail = organizerEmail || process.env.EMAIL_USER || "no-reply@carescribe.com";
 
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//HealthRay HMS//Appointment System//EN",
+    "PRODID:-//CareScribe//Appointment System//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:REQUEST",
     "BEGIN:VEVENT",
@@ -111,10 +111,10 @@ export const buildGoogleCalendarLink = ({
 
   const params = new URLSearchParams({
     action: "TEMPLATE",
-    text: title || "Doctor Appointment - HealthRay HMS",
+    text: title || "Doctor Appointment - CareScribe",
     dates: `${startUtc}/${endUtc}`,
-    details: description || "In-clinic medical consultation scheduled via HealthRay HMS.",
-    location: location || "HealthRay Clinic",
+    details: description || "In-clinic medical consultation scheduled via CareScribe.",
+    location: location || "CareScribe Clinic",
   });
 
   return `https://calendar.google.com/calendar/render?${params.toString()}`;

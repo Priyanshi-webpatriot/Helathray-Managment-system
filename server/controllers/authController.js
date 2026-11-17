@@ -2,7 +2,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import prisma from "../prisma/client.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "healthray_jwt_secret_key";
+const JWT_SECRET = process.env.JWT_SECRET || "carescribe_jwt_secret_key";
 
 // REGISTER
 export const registerUser = async (req, res) => {

@@ -49,8 +49,8 @@ export default function Register() {
             <BsHospital />
           </div>
           <div>
-            <p className="auth-logo-name">HealthRay</p>
-            <span className="auth-logo-sub">HMS Portal</span>
+            <p className="auth-logo-name">CareScribe</p>
+            <span className="auth-logo-sub">Clinical AI Portal</span>
           </div>
         </div>
 
@@ -59,7 +59,7 @@ export default function Register() {
           <span>Our Priority</span>
         </h2>
         <p className="auth-panel-desc">
-          Join HealthRay — a modern healthcare management platform for patients seeking quality care and medical professionals delivering it.
+          Join CareScribe — a modern healthcare management platform for patients seeking quality care and medical professionals delivering it.
         </p>
 
         <div className="auth-panel-features">

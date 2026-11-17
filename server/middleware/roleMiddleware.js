@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "healthray_jwt_secret_key";
+const JWT_SECRET = process.env.JWT_SECRET || "carescribe_jwt_secret_key";
 
 /**
  * verifyToken — Validates the JWT from the Authorization header.

@@ -46,8 +46,8 @@ export default function Login() {
             <BsHospital />
           </div>
           <div>
-            <p className="auth-logo-name">HealthRay</p>
-            <span className="auth-logo-sub">HMS Portal</span>
+            <p className="auth-logo-name">CareScribe</p>
+            <span className="auth-logo-sub">Clinical AI Portal</span>
           </div>
         </div>
 

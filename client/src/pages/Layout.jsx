@@ -28,15 +28,15 @@ export default function Layout() {
         <header className="practo-navbar">
           <div className="practo-navbar-container">
             {/* 1. Left: Brand Logo */}
-            <div className="practo-brand" onClick={() => navigate("/dashboard")} title="HealthRay Home">
+            <div className="practo-brand" onClick={() => navigate("/dashboard")} title="CareScribe Home">
               <div className="practo-brand-icon-box">
                 <BsHospital />
                 <span className="brand-glow-ring"></span>
               </div>
               <div className="practo-brand-text">
                 <div className="practo-brand-title">
-                  <span className="brand-main-practo">HealthRay</span>
-                  <span className="brand-badge-super">+ CARE</span>
+                  <span className="brand-main-practo">CareScribe</span>
+                  <span className="brand-badge-super">+ CLINICAL</span>
                 </div>
                 <span className="brand-sub-practo">Modern Healthcare Portal</span>
               </div>
@@ -44,13 +44,13 @@ export default function Layout() {
 
             {/* 2. Center Pillar: Clinic Selector & Navigation Capsule */}
             <div className="practo-header-center" style={{ display: "flex", alignItems: "center", gap: "16px", margin: "0 auto" }}>
-              <div className="practo-location-pill" onClick={() => navigate("/patient-doctors")} title="HealthRay Main Clinic (In-Clinic & Online)">
+              <div className="practo-location-pill" onClick={() => navigate("/patient-doctors")} title="CareScribe Central Clinic (In-Clinic & Online)">
                 <div className="location-pin-wrap">
                   <FaMapMarkerAlt className="location-icon-pin" />
                   <span className="location-pulse-dot"></span>
                 </div>
                 <div className="location-text-meta">
-                  <span className="location-clinic-name">HealthRay Central Clinic</span>
+                  <span className="location-clinic-name">CareScribe Central Clinic</span>
                   <span className="location-clinic-sub">Online &amp; In-Clinic Available</span>
                 </div>
               </div>
@@ -111,7 +111,7 @@ export default function Layout() {
         <footer className="practo-footer">
           <div className="practo-footer-container">
             <div className="practo-footer-col">
-              <h4>HealthRay Health</h4>
+              <h4>CareScribe Health</h4>
               <p style={{ fontSize: "13px", lineHeight: "1.6", color: "#94a3b8", marginBottom: "16px" }}>
                 Leading the transformation of digital healthcare. Connect with verified medical experts, book seamless clinic visits, and keep your health notes organized safely.
               </p>
@@ -167,14 +167,14 @@ export default function Layout() {
               </p>
               <div style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", padding: "12px" }}>
                 <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", fontWeight: "700" }}>Emergency Desk</div>
-                <div style={{ fontSize: "16px", fontWeight: "800", color: "#14bef0", margin: "2px 0" }}>1800-HEALTH-RAY</div>
-                <div style={{ fontSize: "12px", color: "#cbd5e1" }}>care@healthray.com</div>
+                <div style={{ fontSize: "16px", fontWeight: "800", color: "#14bef0", margin: "2px 0" }}>1800-CARE-SCRIBE</div>
+                <div style={{ fontSize: "12px", color: "#cbd5e1" }}>care@carescribe.com</div>
               </div>
             </div>
           </div>
 
           <div className="practo-footer-bottom">
-            <p>© {new Date().getFullYear()} HealthRay Care Technologies. Practo-inspired compassionate digital care. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} CareScribe Technologies. All rights reserved.</p>
           </div>
         </footer>
 
@@ -194,14 +194,14 @@ export default function Layout() {
         <header className="doctor-navbar">
           <div className="doctor-navbar-container">
             {/* Brand Logo */}
-            <div className="doctor-brand" onClick={() => navigate("/dashboard")} title="HealthRay Practice Home">
+            <div className="doctor-brand" onClick={() => navigate("/dashboard")} title="CareScribe Practice Home">
               <div className="doctor-brand-icon-box">
                 <BsHospital />
                 <span className="brand-glow-ring"></span>
               </div>
               <div className="doctor-brand-text">
                 <div className="doctor-brand-title">
-                  <span className="brand-main-practo">HealthRay</span>
+                  <span className="brand-main-practo">CareScribe</span>
                   <span className="brand-badge-doc">DOCTOR</span>
                 </div>
                 <span className="brand-sub-practo">Clinical OPD &amp; Practice Management</span>
@@ -263,7 +263,7 @@ export default function Layout() {
         <footer className="doctor-footer">
           <div className="doctor-footer-container">
             <div className="doctor-footer-col">
-              <h4>HealthRay Doctor Pro</h4>
+              <h4>CareScribe Doctor Pro</h4>
               <p style={{ fontSize: "13px", lineHeight: "1.6", color: "#94a3b8", marginBottom: "16px" }}>
                 Empowering medical Specialists with smart OPD management, digital EHR records, AI consultation note generation, and seamless patient care workflows.
               </p>
@@ -304,14 +304,14 @@ export default function Layout() {
               </p>
               <div style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "12px", padding: "14px" }}>
                 <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", fontWeight: "700" }}>Doctor Emergency Line</div>
-                <div style={{ fontSize: "16px", fontWeight: "800", color: "#38bdf8", margin: "2px 0" }}>1800-HEALTH-DOC</div>
-                <div style={{ fontSize: "12px", color: "#cbd5e1" }}>doctorsupport@healthray.com</div>
+                <div style={{ fontSize: "16px", fontWeight: "800", color: "#38bdf8", margin: "2px 0" }}>1800-CARE-SCRIBE</div>
+                <div style={{ fontSize: "12px", color: "#cbd5e1" }}>doctorsupport@carescribe.com</div>
               </div>
             </div>
           </div>
 
           <div className="doctor-footer-bottom">
-            <p>© {new Date().getFullYear()} HealthRay Care Technologies. Practo Pro &amp; NexOPD-inspired Doctor Practice Portal. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} CareScribe Technologies. All rights reserved.</p>
           </div>
         </footer>
       </div>
@@ -332,8 +332,8 @@ export default function Layout() {
             <BsHospital />
           </div>
           <div className="brand-name-box">
-            <span className="brand-company">HealthRay</span>
-            <span className="brand-dept">HMS Portal</span>
+            <span className="brand-company">CareScribe</span>
+            <span className="brand-dept">Clinical Portal</span>
           </div>
         </div>
 

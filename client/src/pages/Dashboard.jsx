@@ -590,7 +590,7 @@ export default function Dashboard() {
               <span className="home-section-eyebrow">MY CONSULTATION ACTIVITY</span>
               <h2 className="home-section-title">Your Consultation Activity Trend</h2>
               <p className="home-section-desc">
-                Track your appointment frequency and consultation timeline with HealthRay doctors
+                Track your appointment frequency and consultation timeline with CareScribe doctors
               </p>
             </div>
 
@@ -603,7 +603,7 @@ export default function Dashboard() {
                       <FaChartLine style={{ color: "#14bef0" }} />
                       <span>My Consultation Activity Trend</span>
                     </h3>
-                    <p>Aggregated timeline of your appointments with HealthRay doctors</p>
+                    <p>Aggregated timeline of your appointments with CareScribe doctors</p>
                   </div>
                   <div className="chart-filters">
                     <button
@@ -690,7 +690,7 @@ export default function Dashboard() {
           <div className="patient-web-container">
             <div className="practo-guarantee-banner">
               <div className="practo-guarantee-header">
-                <h2>The HealthRay Care Guarantee</h2>
+                <h2>The CareScribe Quality Guarantee</h2>
                 <p>Enterprise medical quality standards for every patient consultation</p>
               </div>
 
@@ -736,9 +736,9 @@ export default function Dashboard() {
           <div className="patient-web-container">
             <div className="home-section-header">
               <span className="home-section-eyebrow">PATIENT TESTIMONIALS</span>
-              <h2 className="home-section-title">What Our Patients Say About HealthRay</h2>
+              <h2 className="home-section-title">What Our Patients Say About CareScribe</h2>
               <p className="home-section-desc">
-                Real experiences from patients who consulted HealthRay specialists
+                Real experiences from patients who consulted CareScribe specialists
               </p>
             </div>
 
@@ -948,7 +948,7 @@ export default function Dashboard() {
           <div className="doctor-hero-inner">
             <div className="hero-eyebrow-pill">
               <span className="hero-sparkle-dot"></span>
-              <span>HealthRay Doctor Pro • Outpatient Practice Desk</span>
+              <span>CareScribe Doctor Pro • Outpatient Practice Desk</span>
             </div>
 
             <h1 className="doctor-hero-heading" style={{ color: "#0f172a", fontSize: "32px", fontWeight: "850", letterSpacing: "-0.6px", lineHeight: "1.25" }}>
@@ -983,7 +983,7 @@ export default function Dashboard() {
               <FaStethoscope style={{ color: "#0284c7" }} />
               <span>Specialty Practice Departments</span>
             </h3>
-            <span style={{ fontSize: "12.5px", color: "#64748b", fontWeight: "600" }}>HealthRay OPD Network</span>
+            <span style={{ fontSize: "12.5px", color: "#64748b", fontWeight: "600" }}>CareScribe OPD Network</span>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: "16px" }}>
@@ -1676,7 +1676,7 @@ export default function Dashboard() {
         <div className="trust-content">
           <h4>Medical-Grade Security & Audit Logging</h4>
           <p>
-            HealthRay HMS maintains clinical compliance with strict encryption, session validation, and confidential medical history storage for doctors and patients.
+            CareScribe maintains clinical compliance with strict encryption, session validation, and confidential medical history storage for doctors and patients.
           </p>
         </div>
       </footer>

@@ -92,10 +92,10 @@ export const buildHealthcareEmailTemplate = ({
                                             ${headerBadge}
                                         </div>
                                         <div style="font-size: 26px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; margin: 0;">
-                                            HealthRay <span style="font-weight: 400; color: #7dd3fc;">HMS</span>
+                                            CareScribe <span style="font-weight: 400; color: #7dd3fc;">Clinical AI</span>
                                         </div>
                                         <div style="font-size: 12px; color: #cbd5e1; margin-top: 4px; letter-spacing: 0.2px;">
-                                            Advanced Hospital Management & Clinical Care System
+                                            Advanced Clinical Care & Scribe System
                                         </div>
                                     </td>
                                 </tr>
@@ -163,7 +163,7 @@ export const buildHealthcareEmailTemplate = ({
  */
 export const sendEmail = async ({
     to,
-    subject = "HealthRay HMS Notification",
+    subject = "CareScribe Notification",
     text = "",
     html = null,
     recipientName = "",
@@ -191,7 +191,7 @@ export const sendEmail = async ({
         });
 
         const mailOptions = {
-            from: `"HealthRay HMS" <${process.env.EMAIL_USER}>`,
+            from: `"CareScribe" <${process.env.EMAIL_USER}>`,
             to,
             subject,
             text,
