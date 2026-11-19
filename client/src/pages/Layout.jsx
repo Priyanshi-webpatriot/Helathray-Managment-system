@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import "../styles/layout.css";
 import "../styles/patientWebsite.css";
 import "../styles/doctorWebsite.css";
-import { BsHospital, BsCalendar2Check, BsPeople, BsActivity, BsShieldLock, BsFileEarmarkMedical, BsCheckCircleFill } from "react-icons/bs";
+import { BsHospital, BsCalendar2Check, BsPeople, BsActivity, BsShieldLock, BsFileEarmarkMedical, BsCheckCircleFill, BsClockHistory } from "react-icons/bs";
 import { FaUserMd, FaUserInjured, FaSignOutAlt, FaPhoneAlt, FaMapMarkerAlt, FaLock, FaShieldAlt, FaStethoscope } from "react-icons/fa";
 import ChatBox from "../components/ChatBox";
 
@@ -42,20 +42,8 @@ export default function Layout() {
               </div>
             </div>
 
-            {/* 2. Center Pillar: Clinic Selector & Navigation Capsule */}
-            <div className="practo-header-center" style={{ display: "flex", alignItems: "center", gap: "16px", margin: "0 auto" }}>
-              <div className="practo-location-pill" onClick={() => navigate("/patient-doctors")} title="CareScribe Central Clinic (In-Clinic & Online)">
-                <div className="location-pin-wrap">
-                  <FaMapMarkerAlt className="location-icon-pin" />
-                  <span className="location-pulse-dot"></span>
-                </div>
-                <div className="location-text-meta">
-                  <span className="location-clinic-name">CareScribe Central Clinic</span>
-                  <span className="location-clinic-sub">Online &amp; In-Clinic Available</span>
-                </div>
-              </div>
-
-              {/* Creative Segmented Nav Capsule */}
+            {/* 2. Center Pillar: Navigation Capsule */}
+            <div className="practo-header-center" style={{ display: "flex", alignItems: "center", margin: "0 auto" }}>
               <nav className="practo-nav-menu">
                 <NavLink 
                   to="/patient-notes" 
@@ -107,74 +95,79 @@ export default function Layout() {
           <Outlet />
         </main>
 
-        {/* Practo-Style Consumer Footer */}
+        {/* User-Friendly Healthcare Patient Footer */}
         <footer className="practo-footer">
           <div className="practo-footer-container">
+            {/* Col 1: CareScribe Platform Info */}
             <div className="practo-footer-col">
-              <h4>CareScribe Health</h4>
-              <p style={{ fontSize: "13px", lineHeight: "1.6", color: "#94a3b8", marginBottom: "16px" }}>
-                Leading the transformation of digital healthcare. Connect with verified medical experts, book seamless clinic visits, and keep your health notes organized safely.
+              <div className="practo-footer-brand">
+                <div className="practo-brand-icon-box" style={{ width: 34, height: 34, fontSize: 16 }}>
+                  <BsHospital />
+                </div>
+                <div>
+                  <strong style={{ fontSize: "16px", color: "#0f172a" }}>CareScribe</strong>
+                  <span className="brand-badge-super" style={{ marginLeft: "6px", fontSize: "9px" }}>+ CLINICAL</span>
+                </div>
+              </div>
+              <p className="footer-tagline">
+                Next-generation digital outpatient healthcare portal connecting patients with verified medical specialists, smart clinic visits, and real-time electronic health records.
               </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "12.5px", color: "#cbd5e1" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <FaLock style={{ color: "#38bdf8", fontSize: "12px" }} /> ISO 27001 &amp; HIPAA Compliant
+              <div className="footer-trust-chips">
+                <span className="footer-trust-chip">
+                  <FaShieldAlt style={{ color: "#0284c7" }} /> ISO 27001 &amp; HIPAA Certified
                 </span>
-                <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <FaShieldAlt style={{ color: "#10b981", fontSize: "12px" }} /> 256-Bit Encrypted Medical Vault
-                </span>
-                <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <FaUserMd style={{ color: "#a855f7", fontSize: "13px" }} /> 100% Board-Certified Doctors
+                <span className="footer-trust-chip">
+                  <FaLock style={{ color: "#10b981" }} /> 256-Bit Encrypted Health Vault
                 </span>
               </div>
             </div>
 
+            {/* Col 2: Unique Patient Navigation Links (Zero Duplicates!) */}
             <div className="practo-footer-col">
-              <h4>For Patients</h4>
+              <h4>Patient Care Desk</h4>
               <ul className="practo-footer-links">
-                <li><NavLink to="/dashboard">Search Doctors</NavLink></li>
-                <li><NavLink to="/patient-doctors">Book In-Clinic Slots</NavLink></li>
-                <li><NavLink to="/patient-notes">Doctor Clinical Notes</NavLink></li>
-                <li><NavLink to="/patient-profile">Health Records & EHR</NavLink></li>
+                <li><NavLink to="/dashboard">Dashboard Overview</NavLink></li>
+                <li><NavLink to="/patient-doctors">Find &amp; Book Doctor</NavLink></li>
+                <li><NavLink to="/find-clinics">Explore OPD Clinics</NavLink></li>
+                <li><NavLink to="/patient-notes">Consultation Notes</NavLink></li>
+                <li><NavLink to="/patient-profile">My Health Profile</NavLink></li>
               </ul>
             </div>
 
+            {/* Col 3: Clinical Care Resources */}
             <div className="practo-footer-col">
-              <h4>Top Specialties</h4>
+              <h4>Clinical Features</h4>
               <ul className="practo-footer-links">
-                <li><span>General Doctor</span></li>
-                <li><span>Cardiologist</span></li>
-                <li><span>Pediatrician</span></li>
-                <li><span>Dermatologist</span></li>
-                <li><span>Orthopedist</span></li>
-                <li><span>Neurologist</span></li>
+                <li><span>Verified OPD Specialists</span></li>
+                <li><span>Real-time Doctor Availability</span></li>
+                <li><span>Digital Prescriptions &amp; Notes</span></li>
+                <li><span>Automated Visit Reminders</span></li>
+                <li><span>Google Calendar Sync</span></li>
               </ul>
             </div>
 
+            {/* Col 4: 24/7 Patient Helpdesk */}
             <div className="practo-footer-col">
-              <h4>More</h4>
-              <ul className="practo-footer-links">
-                <li><span>Help Center</span></li>
-                <li><span>Privacy Policy</span></li>
-                <li><span>Terms & Conditions</span></li>
-                <li><span>Healthcare Directory</span></li>
-              </ul>
-            </div>
-
-            <div className="practo-footer-col">
-              <h4>24/7 Helpline</h4>
-              <p style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "10px" }}>
-                Need emergency assistance or help with doctor bookings?
-              </p>
-              <div style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", padding: "12px" }}>
-                <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", fontWeight: "700" }}>Emergency Desk</div>
-                <div style={{ fontSize: "16px", fontWeight: "800", color: "#14bef0", margin: "2px 0" }}>1800-CARE-SCRIBE</div>
-                <div style={{ fontSize: "12px", color: "#cbd5e1" }}>care@carescribe.com</div>
+              <h4>Patient Support</h4>
+              <div className="footer-helpline-card">
+                <div className="helpline-card-badge">
+                  <FaPhoneAlt /> Live Care Hotline
+                </div>
+                <div className="helpline-phone">1800-CARE-SCRIBE</div>
+                <div className="helpline-email">care@carescribe.com</div>
+                <div className="helpline-hours">Available 24/7 • Dedicated Support Desk</div>
               </div>
             </div>
           </div>
 
           <div className="practo-footer-bottom">
-            <p>© {new Date().getFullYear()} CareScribe Technologies. All rights reserved.</p>
+            <div className="footer-bottom-inner">
+              <p>© {new Date().getFullYear()} CareScribe Technologies. All rights reserved.</p>
+              <div className="footer-system-status">
+                <span className="system-status-dot"></span>
+                <span>System Operational • All Clinical Services Live</span>
+              </div>
+            </div>
           </div>
         </footer>
 
@@ -225,6 +218,14 @@ export default function Layout() {
                 <FaUserInjured className="nav-icon" />
                 <span>Patient EHR &amp; Analysis</span>
               </NavLink>
+
+              <NavLink 
+                to="/patient-history" 
+                className={({ isActive }) => isActive ? "doctor-nav-link active" : "doctor-nav-link"}
+              >
+                <BsClockHistory className="nav-icon" />
+                <span>Patient History</span>
+              </NavLink>
             </nav>
 
             {/* Right Actions: Doctor Profile Pill & Sign Out */}
@@ -259,59 +260,78 @@ export default function Layout() {
           <Outlet />
         </main>
 
-        {/* Modern Doctor Website Footer */}
+        {/* User-Friendly Healthcare Doctor Footer */}
         <footer className="doctor-footer">
           <div className="doctor-footer-container">
+            {/* Col 1: Doctor Practice Pro Info */}
             <div className="doctor-footer-col">
-              <h4>CareScribe Doctor Pro</h4>
-              <p style={{ fontSize: "13px", lineHeight: "1.6", color: "#94a3b8", marginBottom: "16px" }}>
-                Empowering medical Specialists with smart OPD management, digital EHR records, AI consultation note generation, and seamless patient care workflows.
+              <div className="doctor-footer-brand">
+                <div className="doctor-brand-icon-box" style={{ width: 34, height: 34, fontSize: 16 }}>
+                  <BsHospital />
+                </div>
+                <div>
+                  <strong style={{ fontSize: "16px", color: "#0f172a" }}>CareScribe</strong>
+                  <span className="brand-badge-super" style={{ marginLeft: "6px", fontSize: "9px" }}>DOCTOR PRO</span>
+                </div>
+              </div>
+              <p className="footer-tagline">
+                Clinical practice portal empowering attending physicians with smart OPD scheduling, AI consultation transcription, and electronic health records.
               </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "12.5px", color: "#cbd5e1" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <FaLock style={{ color: "#38bdf8", fontSize: "12px" }} /> HIPAA &amp; ISO 27001 Certified Clinical Data Standard
+              <div className="footer-trust-chips">
+                <span className="footer-trust-chip">
+                  <FaShieldAlt style={{ color: "#0284c7" }} /> Clinical HIPAA Compliance
                 </span>
-                <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <FaShieldAlt style={{ color: "#10b981", fontSize: "12px" }} /> 256-Bit Encrypted Electronic Health Records
+                <span className="footer-trust-chip">
+                  <FaLock style={{ color: "#10b981" }} /> 256-Bit Encrypted EHR Vault
                 </span>
               </div>
             </div>
 
+            {/* Col 2: Unique Doctor Workspace Links (Zero Duplicates!) */}
             <div className="doctor-footer-col">
-              <h4>Practice Hub</h4>
+              <h4>Doctor Workspace</h4>
               <ul className="doctor-footer-links">
                 <li><NavLink to="/dashboard">Practice Overview &amp; KPIs</NavLink></li>
                 <li><NavLink to="/appointments">Consultation Schedule &amp; Slots</NavLink></li>
                 <li><NavLink to="/patients-details">Patient EHR Directory</NavLink></li>
-                <li><NavLink to="/patients-details">AI Clinical SOAP Notes</NavLink></li>
+                <li><NavLink to="/doctor-profile">My Doctor Profile &amp; OPD</NavLink></li>
               </ul>
             </div>
 
+            {/* Col 3: Clinical Operations Standards */}
             <div className="doctor-footer-col">
-              <h4>Clinical Standards</h4>
+              <h4>Clinical Operations</h4>
               <ul className="doctor-footer-links">
-                <li><span>OPD Consultation Workflow</span></li>
-                <li><span>Tele-medicine Protocols</span></li>
-                <li><span>ICD-10 Diagnostic Guidance</span></li>
-                <li><span>Prescription Security</span></li>
+                <li><span>AI SOAP Notes Generation</span></li>
+                <li><span>OPD Queue &amp; Patient Check-in</span></li>
+                <li><span>Digital Rx &amp; Diagnosis Filing</span></li>
+                <li><span>Automated Follow-up Alerts</span></li>
+                <li><span>Clinical Tele-consultation</span></li>
               </ul>
             </div>
 
+            {/* Col 4: Physician Support Desk */}
             <div className="doctor-footer-col">
-              <h4>Doctor Desk Hotline</h4>
-              <p style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "10px" }}>
-                Dedicated technical &amp; clinical support desk for attending doctors.
-              </p>
-              <div style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "12px", padding: "14px" }}>
-                <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", fontWeight: "700" }}>Doctor Emergency Line</div>
-                <div style={{ fontSize: "16px", fontWeight: "800", color: "#38bdf8", margin: "2px 0" }}>1800-CARE-SCRIBE</div>
-                <div style={{ fontSize: "12px", color: "#cbd5e1" }}>doctorsupport@carescribe.com</div>
+              <h4>Physician Support Desk</h4>
+              <div className="footer-helpline-card">
+                <div className="helpline-card-badge">
+                  <FaPhoneAlt /> Priority Doctor Line
+                </div>
+                <div className="helpline-phone">1800-CARE-SCRIBE</div>
+                <div className="helpline-email">doctorsupport@carescribe.com</div>
+                <div className="helpline-hours">Dedicated Clinical IT Desk • 24/7</div>
               </div>
             </div>
           </div>
 
           <div className="doctor-footer-bottom">
-            <p>© {new Date().getFullYear()} CareScribe Technologies. All rights reserved.</p>
+            <div className="footer-bottom-inner">
+              <p>© {new Date().getFullYear()} CareScribe Technologies. All rights reserved.</p>
+              <div className="footer-system-status">
+                <span className="system-status-dot"></span>
+                <span>Doctor Portal Online • Encrypted Clinical Vault</span>
+              </div>
+            </div>
           </div>
         </footer>
       </div>
@@ -377,6 +397,10 @@ export default function Layout() {
               <NavLink to="/patients-details" className={({ isActive }) => isActive ? "sidebar-link active" : "sidebar-link"}>
                 <FaUserInjured className="link-icon" />
                 <span>My Patient List</span>
+              </NavLink>
+              <NavLink to="/patient-history" className={({ isActive }) => isActive ? "sidebar-link active" : "sidebar-link"}>
+                <BsClockHistory className="link-icon" />
+                <span>Patient History</span>
               </NavLink>
             </>
           )}

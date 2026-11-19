@@ -529,16 +529,29 @@
 }
 
 /* ── STEP 2: DIALOGUE STREAM ── */
+.cn-step2-toolbar-bar {
+  padding: 12px 26px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
 .cn-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 10px 14px;
+  padding: 8px 12px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 14px;
+  border-radius: 12px;
+}
+
+.cn-content.cn-content-step2 {
+  padding: 16px 26px 24px 26px;
+  gap: 10px;
 }
 
 .cn-segmented {
@@ -580,33 +593,38 @@
 .cn-turn-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 }
 
 .cn-turn-card {
-  border-radius: 14px;
-  padding: 14px 16px;
+  border-radius: 8px;
+  padding: 6px 12px;
   border: 1px solid #e2e8f0;
   background: #ffffff;
-  transition: box-shadow 0.15s ease;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.cn-turn-card:hover {
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
 }
 
 .cn-turn-card.doctor {
-  border-left: 4px solid #0d9488;
+  border-left: 3px solid #0d9488;
   background: #f0fdfa;
   border-color: #ccfbf1;
   border-left-color: #0d9488;
 }
 
 .cn-turn-card.patient {
-  border-left: 4px solid #0284c7;
+  border-left: 3px solid #0284c7;
   background: #f0f9ff;
   border-color: #bae6fd;
   border-left-color: #0284c7;
 }
 
 .cn-turn-card.caregiver {
-  border-left: 4px solid #8b5cf6;
+  border-left: 3px solid #8b5cf6;
   background: #f5f3ff;
   border-color: #ddd6fe;
   border-left-color: #8b5cf6;
@@ -616,26 +634,26 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 2px;
 }
 
 .cn-turn-speaker {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 6px;
 }
 
 .cn-turn-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  font-size: 13px;
+  font-size: 9.5px;
+  flex-shrink: 0;
 }
 
 .cn-turn-avatar.doctor { background: #0d9488; }
@@ -643,34 +661,84 @@
 .cn-turn-avatar.caregiver { background: #8b5cf6; }
 
 .cn-turn-label {
-  font-size: 12.5px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
   color: #0f172a;
 }
 
 .cn-turn-sub {
-  font-size: 11.5px;
+  font-size: 11px;
   color: #64748b;
-  margin-left: 4px;
+  font-weight: 500;
+}
+
+.cn-turn-card .dialogue-turn-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cn-turn-card .turn-action-btn {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3.5px;
+  line-height: 1.2;
+  transition: all 0.15s ease;
+}
+
+.cn-turn-card .turn-action-btn:hover {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: #94a3b8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.cn-turn-card .turn-action-btn.delete-btn {
+  padding: 2px 5px;
+  color: #94a3b8;
+}
+
+.cn-turn-card .turn-action-btn.delete-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
 }
 
 .cn-turn-textarea {
   width: 100%;
-  border-radius: 10px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  padding: 10px 12px;
+  min-height: 24px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 2px 4px;
   font-size: 13.5px;
-  line-height: 1.5;
+  line-height: 1.42;
   color: #0f172a;
   resize: vertical;
   outline: none;
   font-family: inherit;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.cn-turn-textarea:hover {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: #cbd5e1;
 }
 
 .cn-turn-textarea:focus {
+  background: #ffffff;
   border-color: #0284c7;
-  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+  padding: 4px 6px;
 }
 
 /* ── STEP 3: FOOTER BAR ── */

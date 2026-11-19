@@ -5,7 +5,6 @@ import { useNavigate } from "react-router-dom";
 import {
   FaUserMd,
   FaEdit,
-  FaSave,
   FaHospital,
   FaMapMarkerAlt,
   FaClock,
@@ -14,9 +13,12 @@ import {
   FaAward,
   FaTimes,
   FaCheckCircle,
-  FaShieldAlt
+  FaArrowLeft,
+  FaBuilding,
+  FaStethoscope,
 } from "react-icons/fa";
 import "../styles/doctorWebsite.css";
+import "../styles/patientWebsite.css";
 
 export default function DoctorProfile() {
   const navigate = useNavigate();
@@ -24,7 +26,7 @@ export default function DoctorProfile() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [doctorId, setDoctorId] = useState(null);
 
   const [form, setForm] = useState({
@@ -37,12 +39,17 @@ export default function DoctorProfile() {
     city: "",
     state: "",
     address: "",
-    timing: ""
+    timing: "",
   });
+
+  // Modal edit form state
+  const [editForm, setEditForm] = useState({ ...form });
 
   const fetchDoctorProfile = async () => {
     if (!user || (user.role?.toLowerCase() !== "doctor" && user.role?.toLowerCase() !== "admin")) {
-      toast.error("Access denied. Doctor profile is only accessible to logged-in doctors.", { toastId: "doctor-profile-access-error" });
+      toast.error("Access denied. Doctor profile is only accessible to logged-in doctors.", {
+        toastId: "doctor-profile-access-error",
+      });
       navigate("/");
       return;
     }
@@ -54,13 +61,13 @@ export default function DoctorProfile() {
       const res = await API.get(`/doctors/profile/${doctorIdToFetch}`, {
         headers: {
           role: user.role,
-          userid: doctorIdToFetch
-        }
+          userid: doctorIdToFetch,
+        },
       });
       const doc = res.data;
 
       setDoctorId(doc.id);
-      setForm({
+      const profileData = {
         name: doc.name || user.name || "",
         specialty: doc.specialty || "",
         experience: doc.experience || "",
@@ -70,11 +77,15 @@ export default function DoctorProfile() {
         city: doc.city || "",
         state: doc.state || "",
         address: doc.address || "",
-        timing: doc.timing || ""
-      });
+        timing: doc.timing || "",
+      };
+      setForm(profileData);
+      setEditForm(profileData);
     } catch (error) {
       console.error("Failed to load doctor profile:", error);
-      toast.error(error.response?.data?.error || "Could not fetch doctor profile details.", { toastId: "doctor-profile-error" });
+      toast.error(error.response?.data?.error || "Could not fetch doctor profile details.", {
+        toastId: "doctor-profile-error",
+      });
     } finally {
       setLoading(false);
     }
@@ -84,7 +95,13 @@ export default function DoctorProfile() {
     fetchDoctorProfile();
   }, []);
 
-  const handleSave = async () => {
+  const openEditModal = () => {
+    setEditForm({ ...form });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSave = async (e) => {
+    e?.preventDefault();
     if (!doctorId) {
       toast.error("Doctor profile ID not found.");
       return;
@@ -92,18 +109,19 @@ export default function DoctorProfile() {
 
     try {
       setSaving(true);
-      await API.put(`/doctors/${doctorId}`, form, {
-        headers: { role: user.role }
+      await API.put(`/doctors/${doctorId}`, editForm, {
+        headers: { role: user.role },
       });
 
       // Update localStorage user name if changed
-      if (form.name && user) {
-        const updatedUser = { ...user, name: form.name };
+      if (editForm.name && user) {
+        const updatedUser = { ...user, name: editForm.name };
         localStorage.setItem("user", JSON.stringify(updatedUser));
       }
 
+      setForm({ ...editForm });
       toast.success("Doctor practice profile updated successfully!");
-      setEditing(false);
+      setIsEditModalOpen(false);
       fetchDoctorProfile();
     } catch (error) {
       console.error("Failed to update profile:", error);
@@ -115,426 +133,302 @@ export default function DoctorProfile() {
 
   if (loading) {
     return (
-      <div style={{ padding: "60px 24px", textAlign: "center", color: "#64748b" }}>
-        <h3>Loading Doctor Practice Profile...</h3>
+      <div className="doctor-profile-loading">
+        <div className="loading-spinner"></div>
+        <p>Loading Doctor Practice Profile...</p>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "36px 24px 64px 24px" }}>
-      {/* ── PROFILE HEADER BANNER ── */}
-      <div
-        style={{
-          background: "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)",
-          borderRadius: "24px",
-          padding: "32px",
-          color: "#ffffff",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "24px",
-          boxShadow: "0 10px 30px rgba(2, 132, 199, 0.25)",
-          marginBottom: "32px"
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-          <div
-            style={{
-              width: "72px",
-              height: "72px",
-              borderRadius: "20px",
-              background: "rgba(255, 255, 255, 0.2)",
-              backdropFilter: "blur(10px)",
-              color: "#ffffff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "32px",
-              fontWeight: "900",
-              border: "2px solid rgba(255, 255, 255, 0.4)"
-            }}
-          >
-            {form.name?.[0]?.toUpperCase() || "D"}
+    <div className="doctor-profile-shell">
+      {/* ── BREADCRUMB / BACK ── */}
+      <div className="doctor-profile-nav">
+        <button
+          type="button"
+          className="doctor-profile-back-btn"
+          onClick={() => navigate("/dashboard")}
+        >
+          <FaArrowLeft />
+          <span>Back to Dashboard</span>
+        </button>
+      </div>
+
+      {/* ── PROFILE HERO HEADER BANNER ── */}
+      <div className="doctor-profile-hero-card">
+        <div className="doctor-hero-left-content">
+          <div className="doctor-profile-avatar-box">
+            <span>{form.name?.[0]?.toUpperCase() || "D"}</span>
+            <div className="doctor-verified-badge" title="Verified Practitioner">
+              <FaCheckCircle />
+            </div>
           </div>
-          <div>
-            <h1 style={{ fontSize: "24px", fontWeight: "900", margin: "0 0 6px 0", letterSpacing: "-0.5px" }}>
-              Dr. {form.name}
-            </h1>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13.5px", opacity: 0.9 }}>
-              <span style={{ background: "rgba(255,255,255,0.2)", padding: "3px 12px", borderRadius: "12px", fontWeight: "700" }}>
+
+          <div className="doctor-hero-info">
+            <h1 className="doctor-hero-name">Dr. {form.name}</h1>
+            <div className="doctor-hero-tags-row">
+              <span className="doctor-spec-tag">
+                <FaStethoscope className="hero-tag-icon" />
                 {form.specialty || "General Medicine"}
               </span>
-              <span>•</span>
-              <span>{form.experience || "5+"} Practice Experience</span>
+              <span className="doctor-exp-tag">
+                <FaAward className="hero-tag-icon" />
+                {form.experience ? `${form.experience} Experience` : "5+ Years Experience"}
+              </span>
+              {form.clinicName && (
+                <span className="doctor-clinic-tag">
+                  <FaHospital className="hero-tag-icon" />
+                  {form.clinicName}
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          {!editing ? (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                background: "#ffffff",
-                color: "#0284c7",
-                border: "none",
-                padding: "11px 22px",
-                borderRadius: "12px",
-                fontSize: "13.5px",
-                fontWeight: "800",
-                cursor: "pointer",
-                boxShadow: "0 4px 14px rgba(0,0,0,0.1)",
-                transition: "all 0.2s"
-              }}
-            >
-              <FaEdit /> Edit Practice Profile
-            </button>
-          ) : (
-            <>
+        <button
+          type="button"
+          className="doctor-open-edit-btn"
+          onClick={openEditModal}
+        >
+          <FaEdit />
+          <span>Edit Practice Profile</span>
+        </button>
+      </div>
+
+      {/* ── PRACTICE PROFILE DETAILS CARDS ── */}
+      <div className="doctor-details-grid">
+        {/* Card 1: Clinical Practice Overview */}
+        <div className="doctor-detail-card">
+          <div className="doctor-card-header">
+            <div className="doctor-card-icon-box blue">
+              <FaUserMd />
+            </div>
+            <div>
+              <h3>Clinical Practice Details</h3>
+              <p>Specialization and consultation credentials</p>
+            </div>
+          </div>
+
+          <div className="doctor-card-fields-list">
+            <div className="doctor-info-row">
+              <span className="doctor-info-label">Doctor Name</span>
+              <strong className="doctor-info-value">Dr. {form.name}</strong>
+            </div>
+
+            <div className="doctor-info-row">
+              <span className="doctor-info-label">Medical Specialty</span>
+              <strong className="doctor-info-value">{form.specialty || "General Medicine"}</strong>
+            </div>
+
+            <div className="doctor-info-row">
+              <span className="doctor-info-label">Clinical Experience</span>
+              <strong className="doctor-info-value">{form.experience ? `${form.experience}` : "5+ Years"}</strong>
+            </div>
+
+            <div className="doctor-info-row">
+              <span className="doctor-info-label">OPD Timings</span>
+              <strong className="doctor-info-value">
+                <FaClock style={{ marginRight: 6, color: "#0284c7" }} />
+                {form.timing || "09:00 AM - 08:00 PM"}
+              </strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Hospital & Location Details */}
+        <div className="doctor-detail-card">
+          <div className="doctor-card-header">
+            <div className="doctor-card-icon-box teal">
+              <FaHospital />
+            </div>
+            <div>
+              <h3>Clinic Location &amp; Contact</h3>
+              <p>Physical outpatient center and patient contact</p>
+            </div>
+          </div>
+
+          <div className="doctor-card-fields-list">
+            <div className="doctor-info-row">
+              <span className="doctor-info-label">Hospital / Clinic</span>
+              <strong className="doctor-info-value">{form.clinicName || "CareScribe Clinic"}</strong>
+            </div>
+
+            <div className="doctor-info-row">
+              <span className="doctor-info-label">Contact Phone</span>
+              <strong className="doctor-info-value">
+                <FaPhoneAlt style={{ marginRight: 6, color: "#10b981" }} />
+                {form.mobile || "Not specified"}
+              </strong>
+            </div>
+
+            <div className="doctor-info-row">
+              <span className="doctor-info-label">Account Email</span>
+              <strong className="doctor-info-value">
+                <FaEnvelope style={{ marginRight: 6, color: "#6366f1" }} />
+                {form.email || user?.email || "—"}
+              </strong>
+            </div>
+
+            <div className="doctor-info-row">
+              <span className="doctor-info-label">City &amp; State</span>
+              <strong className="doctor-info-value">
+                <FaBuilding style={{ marginRight: 6, color: "#0284c7" }} />
+                {form.city || "Ahmedabad"}{form.state ? `, ${form.state}` : ""}
+              </strong>
+            </div>
+
+            <div className="doctor-info-row full">
+              <span className="doctor-info-label">Clinic Address</span>
+              <p className="doctor-address-block">
+                <FaMapMarkerAlt style={{ marginRight: 6, color: "#e11d48", flexShrink: 0, marginTop: 2 }} />
+                <span>{form.address || "Address not provided"}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── DOCTOR EDIT PROFILE MODAL (EXACT SAME DESIGN AS PATIENT DASHBOARD) ── */}
+      {isEditModalOpen && (
+        <div
+          className="patient-modal-overlay"
+          onClick={() => !saving && setIsEditModalOpen(false)}
+        >
+          <div className="patient-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="patient-modal-header">
+              <div>
+                <h3>Update Practice Profile</h3>
+                <p>Keep your clinical OPD details, specialty, and clinic location up to date</p>
+              </div>
               <button
                 type="button"
-                onClick={handleSave}
+                className="patient-modal-close-btn"
+                onClick={() => setIsEditModalOpen(false)}
                 disabled={saving}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  background: "#10b981",
-                  color: "#ffffff",
-                  border: "none",
-                  padding: "11px 22px",
-                  borderRadius: "12px",
-                  fontSize: "13.5px",
-                  fontWeight: "800",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 14px rgba(0,0,0,0.15)"
-                }}
               >
-                <FaSave /> {saving ? "Saving..." : "Save Changes"}
+                <FaTimes />
               </button>
-              <button
-                type="button"
-                onClick={() => setEditing(false)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  background: "rgba(255,255,255,0.2)",
-                  color: "#ffffff",
-                  border: "1px solid rgba(255,255,255,0.4)",
-                  padding: "11px 18px",
-                  borderRadius: "12px",
-                  fontSize: "13.5px",
-                  fontWeight: "700",
-                  cursor: "pointer"
-                }}
-              >
-                <FaTimes /> Cancel
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+            </div>
 
-      {/* ── PROFILE DETAILS FORM & VIEW ── */}
-      <div
-        style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
-          borderRadius: "24px",
-          padding: "32px",
-          boxShadow: "0 4px 20px rgba(15, 23, 42, 0.03)"
-        }}
-      >
-        <h3 style={{ fontSize: "18px", fontWeight: "800", color: "#0f172a", marginTop: 0, marginBottom: "24px", display: "flex", alignItems: "center", gap: "10px" }}>
-          <FaHospital style={{ color: "#0284c7" }} /> Clinical OPD &amp; Practice Details
-        </h3>
+            <form onSubmit={handleSave}>
+              <div className="patient-modal-body">
+                <div className="modal-form-grid">
+                  <div className="modal-form-field">
+                    <label>Doctor Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      placeholder="e.g. Piyush Sharma"
+                    />
+                  </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "24px" }}>
-          {/* Doctor Name */}
-          <div>
-            <label style={{ display: "block", fontSize: "11.5px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", marginBottom: "6px" }}>
-              Doctor Full Name
-            </label>
-            <input
-              disabled={!editing}
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              style={{
-                width: "100%",
-                padding: "11px 14px",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                background: editing ? "#ffffff" : "#f8fafc",
-                fontSize: "14px",
-                fontWeight: "700",
-                color: "#0f172a",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
+                  <div className="modal-form-field">
+                    <label>Medical Specialty *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editForm.specialty}
+                      onChange={(e) => setEditForm({ ...editForm, specialty: e.target.value })}
+                      placeholder="e.g. Ophthalmology"
+                    />
+                  </div>
 
-          {/* Specialty */}
-          <div>
-            <label style={{ display: "block", fontSize: "11.5px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", marginBottom: "6px" }}>
-              Medical Specialty
-            </label>
-            <input
-              disabled={!editing}
-              placeholder="e.g. Diabetology & Endocrinology"
-              value={form.specialty}
-              onChange={(e) => setForm({ ...form, specialty: e.target.value })}
-              style={{
-                width: "100%",
-                padding: "11px 14px",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                background: editing ? "#ffffff" : "#f8fafc",
-                fontSize: "14px",
-                fontWeight: "700",
-                color: "#0f172a",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
+                  <div className="modal-form-field">
+                    <label>Experience (Years)</label>
+                    <input
+                      type="text"
+                      value={editForm.experience}
+                      onChange={(e) => setEditForm({ ...editForm, experience: e.target.value })}
+                      placeholder="e.g. 7 Years"
+                    />
+                  </div>
 
-          {/* Clinic Name */}
-          <div>
-            <label style={{ display: "block", fontSize: "11.5px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", marginBottom: "6px" }}>
-              Clinic / Hospital Name
-            </label>
-            <input
-              disabled={!editing}
-              placeholder="e.g. ABC CLINIC"
-              value={form.clinicName}
-              onChange={(e) => setForm({ ...form, clinicName: e.target.value })}
-              style={{
-                width: "100%",
-                padding: "11px 14px",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                background: editing ? "#ffffff" : "#f8fafc",
-                fontSize: "14px",
-                fontWeight: "700",
-                color: "#0f172a",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
+                  <div className="modal-form-field">
+                    <label>Contact Phone *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editForm.mobile}
+                      onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })}
+                      placeholder="e.g. 9876543210"
+                    />
+                  </div>
 
-          {/* Experience */}
-          <div>
-            <label style={{ display: "block", fontSize: "11.5px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", marginBottom: "6px" }}>
-              Experience (Years)
-            </label>
-            <input
-              disabled={!editing}
-              placeholder="e.g. 12+"
-              value={form.experience}
-              onChange={(e) => setForm({ ...form, experience: e.target.value })}
-              style={{
-                width: "100%",
-                padding: "11px 14px",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                background: editing ? "#ffffff" : "#f8fafc",
-                fontSize: "14px",
-                fontWeight: "700",
-                color: "#0f172a",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
+                  <div className="modal-form-field">
+                    <label>Clinic / Hospital Name</label>
+                    <input
+                      type="text"
+                      value={editForm.clinicName}
+                      onChange={(e) => setEditForm({ ...editForm, clinicName: e.target.value })}
+                      placeholder="e.g. Spandan Hospital"
+                    />
+                  </div>
 
-          {/* City */}
-          <div>
-            <label style={{ display: "block", fontSize: "11.5px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", marginBottom: "6px" }}>
-              City
-            </label>
-            <input
-              disabled={!editing}
-              placeholder="e.g. Betul or Ahmedabad"
-              value={form.city}
-              onChange={(e) => setForm({ ...form, city: e.target.value })}
-              style={{
-                width: "100%",
-                padding: "11px 14px",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                background: editing ? "#ffffff" : "#f8fafc",
-                fontSize: "14px",
-                fontWeight: "700",
-                color: "#0f172a",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
+                  <div className="modal-form-field">
+                    <label>City</label>
+                    <input
+                      type="text"
+                      value={editForm.city}
+                      onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                      placeholder="e.g. Ahmedabad"
+                    />
+                  </div>
 
-          {/* State */}
-          <div>
-            <label style={{ display: "block", fontSize: "11.5px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", marginBottom: "6px" }}>
-              State
-            </label>
-            <input
-              disabled={!editing}
-              placeholder="e.g. Madhya Pradesh or Gujarat"
-              value={form.state}
-              onChange={(e) => setForm({ ...form, state: e.target.value })}
-              style={{
-                width: "100%",
-                padding: "11px 14px",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                background: editing ? "#ffffff" : "#f8fafc",
-                fontSize: "14px",
-                fontWeight: "700",
-                color: "#0f172a",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
+                  <div className="modal-form-field">
+                    <label>State / Province</label>
+                    <input
+                      type="text"
+                      value={editForm.state}
+                      onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
+                      placeholder="e.g. Gujarat"
+                    />
+                  </div>
 
-          {/* Mobile */}
-          <div>
-            <label style={{ display: "block", fontSize: "11.5px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", marginBottom: "6px" }}>
-              Contact Mobile
-            </label>
-            <input
-              disabled={!editing}
-              placeholder="+91 98765 43210"
-              value={form.mobile}
-              onChange={(e) => setForm({ ...form, mobile: e.target.value })}
-              style={{
-                width: "100%",
-                padding: "11px 14px",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                background: editing ? "#ffffff" : "#f8fafc",
-                fontSize: "14px",
-                fontWeight: "700",
-                color: "#0f172a",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
+                  <div className="modal-form-field">
+                    <label>OPD Consultation Timings</label>
+                    <input
+                      type="text"
+                      value={editForm.timing}
+                      onChange={(e) => setEditForm({ ...editForm, timing: e.target.value })}
+                      placeholder="e.g. 09:00 AM - 08:00 PM"
+                    />
+                  </div>
 
-          {/* Email */}
-          <div>
-            <label style={{ display: "block", fontSize: "11.5px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", marginBottom: "6px" }}>
-              Account Email
-            </label>
-            <input
-              disabled={!editing}
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              style={{
-                width: "100%",
-                padding: "11px 14px",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                background: editing ? "#ffffff" : "#f8fafc",
-                fontSize: "14px",
-                fontWeight: "700",
-                color: "#0f172a",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
+                  <div className="modal-form-field full-span">
+                    <label>Full Clinic Address</label>
+                    <textarea
+                      rows={3}
+                      value={editForm.address}
+                      onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                      placeholder="e.g. Suvidha Complex, near Vejalpur Bus Stop"
+                    />
+                  </div>
+                </div>
+              </div>
 
-          {/* Address */}
-          <div>
-            <label style={{ display: "block", fontSize: "11.5px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", marginBottom: "6px" }}>
-              Full Clinic Address
-            </label>
-            <input
-              disabled={!editing}
-              placeholder="e.g. Khedi Road, Near Civil Lines"
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-              style={{
-                width: "100%",
-                padding: "11px 14px",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                background: editing ? "#ffffff" : "#f8fafc",
-                fontSize: "14px",
-                fontWeight: "700",
-                color: "#0f172a",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
-
-          {/* OPD Timings */}
-          <div>
-            <label style={{ display: "block", fontSize: "11.5px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", marginBottom: "6px" }}>
-              OPD Consultation Timings
-            </label>
-            <input
-              disabled={!editing}
-              placeholder="e.g. 09:00 AM - 08:00 PM"
-              value={form.timing}
-              onChange={(e) => setForm({ ...form, timing: e.target.value })}
-              style={{
-                width: "100%",
-                padding: "11px 14px",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                background: editing ? "#ffffff" : "#f8fafc",
-                fontSize: "14px",
-                fontWeight: "700",
-                color: "#0f172a",
-                boxSizing: "border-box"
-              }}
-            />
+              <div className="patient-modal-footer">
+                <button
+                  type="button"
+                  className="modal-cancel-btn"
+                  onClick={() => setIsEditModalOpen(false)}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="modal-save-btn"
+                  disabled={saving}
+                >
+                  {saving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-
-        {editing && (
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", paddingTop: "16px", borderTop: "1px solid #f1f5f9" }}>
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              style={{
-                padding: "10px 20px",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                background: "#ffffff",
-                color: "#475569",
-                fontSize: "13.5px",
-                fontWeight: "700",
-                cursor: "pointer"
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                padding: "10px 24px",
-                borderRadius: "10px",
-                border: "none",
-                background: "#0284c7",
-                color: "#ffffff",
-                fontSize: "13.5px",
-                fontWeight: "800",
-                cursor: "pointer",
-                boxShadow: "0 4px 12px rgba(2, 132, 199, 0.25)"
-              }}
-            >
-              {saving ? "Saving..." : "Save Profile Changes"}
-            </button>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

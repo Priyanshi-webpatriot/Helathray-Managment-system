@@ -286,7 +286,7 @@ export default function Doctors() {
         <div className="form-group">
           <label className="form-label">City</label>
           <input
-            placeholder="e.g. Betul or Ahmedabad"
+            placeholder="e.g. London, Toronto, New York, Mumbai"
             value={form.city || ""}
             onChange={(e) => setForm({ ...form, city: e.target.value })}
           />

@@ -15,6 +15,7 @@ import PatientProfile from "./pages/PatientProfile";
 import PatientNotesPage from "./pages/PatientNotesPage";
 import FindClinics from "./pages/FindClinics";
 import DoctorProfile from "./pages/DoctorProfile";
+import DoctorPatientHistory from "./pages/DoctorPatientHistory";
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
           <Route path="/patient-profile" element={<PatientProfile />} />
           <Route path="/patient-notes" element={<PatientNotesPage />} />
           <Route path="/doctor-profile" element={<DoctorProfile />} />
+          <Route path="/patient-history" element={<DoctorPatientHistory />} />
         </Route>
       </Routes>
     </BrowserRouter>

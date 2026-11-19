@@ -6,6 +6,7 @@ import {
   formatDialogue,
   generateSOAPNote,
   saveConsultationDraft,
+  updateConsultationDraft,
   approveConsultationNote,
   getConsultationNotes,
   getMyPatientNotes,
@@ -30,6 +31,9 @@ router.post("/generate-soap", checkRole(["doctor", "admin"]), generateSOAPNote);
 
 // Save draft note (doctor only)
 router.post("/save-draft", checkRole(["doctor", "admin"]), saveConsultationDraft);
+
+// Update existing draft note (doctor only)
+router.put("/:id", checkRole(["doctor", "admin"]), updateConsultationDraft);
 
 // Doctor approves final note → also auto-generates patient-friendly version
 router.post("/approve", checkRole(["doctor", "admin"]), approveConsultationNote);

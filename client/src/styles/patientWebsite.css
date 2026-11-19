@@ -939,10 +939,13 @@
 }
 
 .practo-chart-card {
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 20px;
-  padding: 32px;
+  padding: 30px 32px;
   box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
 }
 
@@ -1188,29 +1191,61 @@
 /* ─────────────────────────────────────────────────────────────
    PRACTO FOOTER
    ───────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   USER-FRIENDLY HEALTHCARE FOOTER (LIGHT & MODERN)
+   ───────────────────────────────────────────────────────────── */
 .practo-footer {
-  background: #0f172a;
-  color: #94a3b8;
-  padding-top: 44px;
+  background: #ffffff;
+  color: #64748b;
+  padding-top: 48px;
   margin-top: auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid #e2e8f0;
 }
 
 .practo-footer-container {
-  max-width: 1200px;
+  max-width: 1240px;
   margin: 0 auto;
   padding: 0 24px;
   display: grid;
-  grid-template-columns: 1.6fr 1fr 1fr 1fr 1.2fr;
-  gap: 28px;
+  grid-template-columns: 1.4fr 1fr 1fr 1.25fr;
+  gap: 36px;
   margin-bottom: 36px;
+}
+
+.practo-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.footer-tagline {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: #64748b;
+  margin: 0 0 16px 0;
+}
+
+.footer-trust-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.footer-trust-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #334155;
 }
 
 .practo-footer-col h4 {
   font-size: 15px;
-  font-weight: 700;
-  color: #ffffff;
-  margin: 0 0 18px 0;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 16px 0;
   letter-spacing: -0.2px;
 }
 
@@ -1220,27 +1255,110 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
-.practo-footer-links li a,
-.practo-footer-links li span {
-  color: #94a3b8;
+.practo-footer-links li a {
+  color: #475569;
   font-size: 13.5px;
+  font-weight: 600;
   text-decoration: none;
-  transition: color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
 }
 
 .practo-footer-links li a:hover {
-  color: #14bef0;
+  color: #0284c7;
+  transform: translateX(3px);
+}
+
+.practo-footer-links li span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.footer-helpline-card {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 18px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.06);
+}
+
+.helpline-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #0284c7;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.helpline-phone {
+  font-size: 18px;
+  font-weight: 900;
+  color: #0369a1;
+  letter-spacing: 0.2px;
+}
+
+.helpline-email {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.helpline-hours {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #0284c7;
+  margin-top: 2px;
 }
 
 .practo-footer-bottom {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 24px 24px;
-  text-align: center;
+  border-top: 1px solid #f1f5f9;
+  padding: 18px 24px;
+  background: #f8fafc;
+}
+
+.footer-bottom-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
   font-size: 13px;
   color: #64748b;
+}
+
+.footer-bottom-inner p {
+  margin: 0;
+}
+
+.footer-system-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.system-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -2109,8 +2227,14 @@
 
 .modal-info-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
+}
+
+@media (max-width: 680px) {
+  .modal-info-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .modal-info-card {

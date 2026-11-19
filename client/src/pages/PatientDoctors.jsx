@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import API from "../api";
 import "../styles/patientDoctors.css";
 import { toast } from "react-toastify";
@@ -36,7 +36,27 @@ import {
   FaCalendarCheck,
   FaChevronLeft,
   FaChevronRight,
+  FaChevronDown,
+  FaChevronUp,
+  FaEye,
+  FaLungs,
+  FaTooth,
+  FaUserMd,
+  FaFilter,
+  FaHandsWash,
 } from "react-icons/fa";
+import {
+  generateDoctorSlots,
+  isSlotPastForToday,
+  formatTimeTo12Hour,
+  formatDateToDDMMYYYY,
+} from "../utils/slotHelper";
+import {
+  calculateHaversineDistance,
+  resolveDoctorCoordinatesDynamic,
+  geocodeAddressDynamic,
+  detectLiveUserCity,
+} from "../utils/geoHelper";
 
 export default function PatientDoctors() {
   const navigate = useNavigate();
@@ -54,59 +74,123 @@ export default function PatientDoctors() {
   const [modalDoctor, setModalDoctor] = useState(null);
   const [modalDate, setModalDate] = useState("");
   const [modalTime, setModalTime] = useState("");
+  const [modalBookedSlots, setModalBookedSlots] = useState([]);
+  const [loadingModalSlots, setLoadingModalSlots] = useState(false);
   const [isSubmittingModal, setIsSubmittingModal] = useState(false);
+
+  useEffect(() => {
+    if (!modalDoctor || !modalDate) {
+      setModalBookedSlots([]);
+      return;
+    }
+    let isCancelled = false;
+    setLoadingModalSlots(true);
+    API.get(`/patient-appointments/booked-slots?doctorId=${modalDoctor.id}&date=${modalDate}`)
+      .then((res) => {
+        if (!isCancelled) {
+          setModalBookedSlots(res.data?.bookedSlots || []);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load doctor slots", err);
+        if (!isCancelled) setModalBookedSlots([]);
+      })
+      .finally(() => {
+        if (!isCancelled) setLoadingModalSlots(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [modalDoctor, modalDate]);
 
   const [searchTerm, setSearchTerm] = useState(searchParam);
   const [locationSearch, setLocationSearch] = useState(initialLocation);
   const [isNearMeActive, setIsNearMeActive] = useState(nearMeParam);
   const [selectedSpecialty, setSelectedSpecialty] = useState("All");
+  const [isSpecialtiesExpanded, setIsSpecialtiesExpanded] = useState(false);
+  const specialtyScrollRef = useRef(null);
+
+  const scrollSpecialties = (direction) => {
+    if (specialtyScrollRef.current) {
+      specialtyScrollRef.current.scrollBy({
+        left: direction === "left" ? -280 : 280,
+        behavior: "smooth",
+      });
+    }
+  };
   const [viewMode, setViewMode] = useState("cards");
 
   const [userCoords, setUserCoords] = useState(null);
   const [userCity, setUserCity] = useState("");
+  const [doctorCoordsMap, setDoctorCoordsMap] = useState({});
 
   const [currentPage, setCurrentPage] = useState(1);
   const doctorsPerPage = 6;
 
   const user = JSON.parse(localStorage.getItem("user") || "null");
 
-  // Native Geolocation Handler
-  const handleDetectLocation = () => {
-    const patientCity = user?.city || user?.address || "Ahmedabad";
-
-    if (navigator.geolocation) {
-      toast.info("Detecting your location...", { toastId: "loc-detect" });
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          setUserCoords({ lat, lng });
-          setUserCity(patientCity);
-          setIsNearMeActive(true);
-          setLocationSearch(`Near Me (${patientCity})`);
-          setCurrentPage(1);
-          toast.success(`Location detected! Showing doctors near ${patientCity}.`, {
-            toastId: "loc-success",
-          });
-        },
-        (err) => {
-          console.warn("Geolocation error, using registered patient location:", err);
-          setUserCoords({ lat: 23.0225, lng: 72.5714 });
-          setUserCity(patientCity);
-          setIsNearMeActive(true);
-          setLocationSearch(`Near Me (${patientCity})`);
-          setCurrentPage(1);
-          toast.info(`Showing doctors near ${patientCity}.`, { toastId: "loc-fallback" });
-        },
-        { timeout: 5000, enableHighAccuracy: true }
-      );
-    } else {
-      setUserCoords({ lat: 23.0225, lng: 72.5714 });
-      setUserCity(patientCity);
-      setIsNearMeActive(true);
-      setLocationSearch(`Near Me (${patientCity})`);
-      setCurrentPage(1);
+  // Native Geolocation & Real Dynamic Reverse-Geocoding Handler (Universal worldwide)
+  const handleDetectLocation = async () => {
+    // If Near Me is already active, clicking again toggles it off
+    if (isNearMeActive) {
+      setIsNearMeActive(false);
+      setLocationSearch("");
+      setUserCoords(null);
+      setUserCity("");
+      toast.info("Near Me filter disabled.");
+      return;
     }
+
+    const fallbackCity = user?.city || user?.address || "";
+
+    if (!navigator.geolocation) {
+      toast.warn("Geolocation not supported by this browser." + (fallbackCity ? ` Using: ${fallbackCity}` : ""));
+      if (fallbackCity) {
+        setUserCity(fallbackCity);
+        setIsNearMeActive(true);
+        setLocationSearch(`Near Me (${fallbackCity})`);
+      }
+      return;
+    }
+
+    toast.info("Accessing live GPS location...", { toastId: "loc-detect" });
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setUserCoords({ lat, lng });
+
+        // Real dynamic reverse-geocoding of patient GPS coordinates worldwide
+        const geoResult = await detectLiveUserCity(lat, lng);
+        const detectedLocation = geoResult?.city || geoResult?.state || fallbackCity || "Your Location";
+
+        setUserCity(detectedLocation);
+        setIsNearMeActive(true);
+        setLocationSearch(`Near Me (${detectedLocation})`);
+        setCurrentPage(1);
+
+        toast.success(`Location detected: ${detectedLocation}! Showing nearest doctors first.`, {
+          toastId: "loc-success",
+        });
+      },
+      async (err) => {
+        console.warn("Geolocation permission denied or unavailable, trying profile location:", err);
+        if (fallbackCity) {
+          const fallbackGeo = await geocodeAddressDynamic(fallbackCity);
+          if (fallbackGeo) {
+            setUserCoords({ lat: fallbackGeo.lat, lng: fallbackGeo.lng });
+          }
+          setUserCity(fallbackCity);
+          setIsNearMeActive(true);
+          setLocationSearch(`Near Me (${fallbackCity})`);
+          toast.info(`Using your profile city (${fallbackCity}) for distance.`, { toastId: "loc-fallback" });
+        } else {
+          toast.error("Please allow location access to find doctors near you.");
+        }
+      },
+      { timeout: 8000, enableHighAccuracy: true }
+    );
   };
 
   // FETCH DOCTORS
@@ -134,6 +218,38 @@ export default function PatientDoctors() {
       console.log("Failed to load booked appointments:", error);
     }
   };
+
+  // Dynamically resolve GPS coordinates for every doctor worldwide (Canada, UK, Europe, India, US, etc.)
+  useEffect(() => {
+    if (!doctors || doctors.length === 0) return;
+    let isCancelled = false;
+
+    const resolveCoords = async () => {
+      const updatedMap = { ...doctorCoordsMap };
+      let hasNew = false;
+
+      await Promise.all(
+        doctors.map(async (doc) => {
+          if (!doc.id || updatedMap[doc.id]) return;
+          const geo = await resolveDoctorCoordinatesDynamic(doc);
+          if (geo && !isCancelled) {
+            updatedMap[doc.id] = geo;
+            hasNew = true;
+          }
+        })
+      );
+
+      if (hasNew && !isCancelled) {
+        setDoctorCoordsMap(updatedMap);
+      }
+    };
+
+    resolveCoords();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [doctors]);
 
   useEffect(() => {
     fetchDoctors();
@@ -167,6 +283,40 @@ export default function PatientDoctors() {
     const hours = String(d.getHours()).padStart(2, "0");
     const minutes = String(d.getMinutes()).padStart(2, "0");
     return `${hours}:${minutes}`;
+  };
+
+  // Returns an active upcoming appointment with this doctor (today upcoming or future)
+  const getActiveDoctorBooking = (doctorId) => {
+    const todayStr = getTodayDateStr();
+    const upcoming = bookedDoctors
+      .filter((b) => {
+        if (b.doctorId !== doctorId) return false;
+        const apptDate = (b.date || "").split("T")[0];
+        if (apptDate > todayStr) return true;
+        if (apptDate === todayStr) {
+          return !isSlotPastForToday(apptDate, b.time);
+        }
+        return false;
+      })
+      .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    return upcoming[0] || null;
+  };
+
+  // Returns the most recent past completed appointment with this doctor
+  const getPastDoctorBooking = (doctorId) => {
+    const todayStr = getTodayDateStr();
+    const past = bookedDoctors
+      .filter((b) => {
+        if (b.doctorId !== doctorId) return false;
+        const apptDate = (b.date || "").split("T")[0];
+        if (apptDate < todayStr) return true;
+        if (apptDate === todayStr) {
+          return isSlotPastForToday(apptDate, b.time);
+        }
+        return false;
+      })
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    return past[0] || null;
   };
 
   // BOOK APPOINTMENT
@@ -239,10 +389,9 @@ export default function PatientDoctors() {
 
   const openBookingModal = (doctor) => {
     setModalDoctor(doctor);
-    const initialDate = selectedDates[doctor.id] || getTodayDateStr();
-    const initialTime = selectedTimes[doctor.id] || "10:30";
+    const initialDate = selectedDates[doctor.id] || "";
     setModalDate(initialDate);
-    setModalTime(initialTime);
+    setModalTime("");
   };
 
   const handleModalConfirm = async () => {
@@ -258,7 +407,8 @@ export default function PatientDoctors() {
   // EXPORT EXCEL
   const exportToExcel = () => {
     const excelData = doctors.map((d) => {
-      const bookedAppointment = bookedDoctors.find((b) => b.doctorId === d.id);
+      const activeAppointment = getActiveDoctorBooking(d.id);
+      const pastAppointment = getPastDoctorBooking(d.id);
       return {
         Name: `Dr. ${d.name}`,
         Specialty: d.specialty || "General Medicine",
@@ -266,9 +416,13 @@ export default function PatientDoctors() {
         Clinic: d.clinicName || "CareScribe Clinic",
         City: d.city || "—",
         Mobile: d.mobile || "—",
-        Status: bookedAppointment ? "Booked" : "Available",
-        AppointmentDate: bookedAppointment ? bookedAppointment.date.split("T")[0] : "-",
-        AppointmentTime: bookedAppointment?.time || "-",
+        Status: activeAppointment ? "Booked" : "Available",
+        AppointmentDate: activeAppointment
+          ? activeAppointment.date.split("T")[0]
+          : pastAppointment
+          ? `Past: ${pastAppointment.date.split("T")[0]}`
+          : "-",
+        AppointmentTime: activeAppointment?.time || "-",
       };
     });
 
@@ -299,14 +453,14 @@ export default function PatientDoctors() {
     const tableColumn = ["Doctor Name", "Specialty", "Experience", "Clinic / City", "Contact", "Status"];
 
     const tableRows = doctors.map((d) => {
-      const bookedAppointment = bookedDoctors.find((b) => b.doctorId === d.id);
+      const activeAppointment = getActiveDoctorBooking(d.id);
       return [
         `Dr. ${d.name}`,
         d.specialty || "General Medicine",
         d.experience ? `${d.experience} Yrs` : "—",
         `${d.clinicName || "Clinic"}, ${d.city || ""}`,
         d.mobile || "—",
-        bookedAppointment ? "Booked" : "Available",
+        activeAppointment ? "Booked" : "Available",
       ];
     });
 
@@ -321,23 +475,55 @@ export default function PatientDoctors() {
     doc.save("Doctors_List.pdf");
   };
 
-  // SPECIALTY CATEGORIES
-  const availableSpecialties = [
-    ...new Set(doctors.map((d) => d.specialty?.trim()).filter(Boolean)),
-  ];
+  // DYNAMIC SPECIALTY EXTRACTION FROM DATABASE DOCTORS
+  const specialtyMap = new Map();
+  doctors.forEach((d) => {
+    const raw = (d.specialty || "").trim();
+    if (!raw) return;
+    const key = raw.toLowerCase();
+    if (!specialtyMap.has(key)) {
+      // Capitalize first letter of each word for clean display (e.g. "pediatric" -> "Pediatric")
+      const label = raw
+        .split(/\s+/)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(" ");
+      specialtyMap.set(key, { raw, label, count: 0 });
+    }
+    specialtyMap.get(key).count += 1;
+  });
+
+  const getSpecialtyIcon = (specKey = "") => {
+    const lower = specKey.toLowerCase();
+    if (lower.includes("cardio") || lower.includes("heart")) return FaHeartbeat;
+    if (lower.includes("pedia") || lower.includes("child")) return FaBaby;
+    if (lower.includes("derma") || lower.includes("skin")) return FaPumpSoap;
+    if (lower.includes("ortho") || lower.includes("bone")) return FaBone;
+    if (lower.includes("neuro") || lower.includes("brain")) return FaBrain;
+    if (lower.includes("ophthalm") || lower.includes("eye")) return FaEye;
+    if (lower.includes("pulmon") || lower.includes("lung") || lower.includes("respir")) return FaLungs;
+    if (lower.includes("dent") || lower.includes("tooth") || lower.includes("teeth")) return FaTooth;
+    if (lower.includes("rheumat") || lower.includes("joint")) return FaHandsWash;
+    if (lower.includes("general") || lower.includes("physician") || lower.includes("medicine")) return FaUserMd;
+    return FaStethoscope;
+  };
+
+  const sortedSpecialties = Array.from(specialtyMap.entries())
+    .map(([key, data]) => ({
+      id: data.raw,
+      label: data.label,
+      icon: getSpecialtyIcon(key),
+      count: data.count,
+    }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
   const specialtyCategories = [
-    { id: "All", label: "All Specialties", icon: FaThLarge },
-    ...availableSpecialties.map((spec) => {
-      let IconComponent = FaStethoscope;
-      const lower = spec.toLowerCase();
-      if (lower.includes("cardio") || lower.includes("heart")) IconComponent = FaHeartbeat;
-      else if (lower.includes("pedia") || lower.includes("child")) IconComponent = FaBaby;
-      else if (lower.includes("derma") || lower.includes("skin")) IconComponent = FaPumpSoap;
-      else if (lower.includes("ortho") || lower.includes("bone")) IconComponent = FaBone;
-      else if (lower.includes("neuro") || lower.includes("brain")) IconComponent = FaBrain;
-      return { id: spec, label: spec, icon: IconComponent };
-    }),
+    {
+      id: "All",
+      label: "All Specialties",
+      icon: FaThLarge,
+      count: doctors.length,
+    },
+    ...sortedSpecialties,
   ];
 
   const termLower = (searchTerm || "").trim().toLowerCase();
@@ -401,36 +587,39 @@ export default function PatientDoctors() {
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
   };
 
-  // DISTANCE PROCESSING
-  const currentDetectedCity = (userCity || "Ahmedabad").trim().toLowerCase();
+  // REAL DISTANCE PROCESSING USING UNIVERSAL HAVERSINE FORMULA
+  const activeUserCoords = userCoords;
+  const currentDetectedCity = (userCity || "").trim().toLowerCase();
 
   const doctorsWithDistance = doctors.map((doc) => {
+    const docGeo = doctorCoordsMap[doc.id];
     const docCity = (doc.city || "").toLowerCase();
     const docAddress = (doc.address || "").toLowerCase();
-    const docState = (doc.state || "").toLowerCase();
 
+    // Check if in same city / locality dynamically
     const isSameCity =
-      !currentDetectedCity ||
-      docCity.includes(currentDetectedCity) ||
-      currentDetectedCity.includes(docCity) ||
-      docAddress.includes(currentDetectedCity) ||
-      docState.includes(currentDetectedCity) ||
-      (currentDetectedCity.includes("ahmed") &&
-        (docCity.includes("ahmed") || docAddress.includes("ahmed") || docCity.includes("ahemd"))) ||
-      docCity.includes("ahmed") ||
-      docCity.includes("ahemd") ||
-      docAddress.includes("ahmed");
+      Boolean(currentDetectedCity) &&
+      (docCity.includes(currentDetectedCity) ||
+        currentDetectedCity.includes(docCity) ||
+        docAddress.includes(currentDetectedCity));
 
     let distanceKm = null;
-    if (userCoords || isNearMeActive) {
-      if (isSameCity) {
-        distanceKm = Math.round((((doc.id * 17) % 35) + 5.2) * 10) / 10;
-      } else {
-        distanceKm = Math.round((((doc.id * 83) % 300) + 480) * 10) / 10;
-      }
+    if (activeUserCoords && docGeo) {
+      distanceKm = calculateHaversineDistance(
+        activeUserCoords.lat,
+        activeUserCoords.lng,
+        docGeo.lat,
+        docGeo.lng
+      );
     }
 
-    return { ...doc, distanceKm, isSameCity };
+    return {
+      ...doc,
+      distanceKm,
+      isSameCity,
+      docLat: docGeo?.lat,
+      docLng: docGeo?.lng,
+    };
   });
 
   // FILTERED DOCTORS
@@ -452,14 +641,17 @@ export default function PatientDoctors() {
 
     // 2. Specialty pill filter
     const matchesSpecialty =
-      selectedSpecialty === "All" || spec.includes(selectedSpecialty.toLowerCase());
+      selectedSpecialty === "All" ||
+      spec === selectedSpecialty.toLowerCase() ||
+      spec.includes(selectedSpecialty.toLowerCase());
 
     // 3. Location & Near Me filter
     const locLower = (locationSearch || "").trim().toLowerCase();
     let matchesLocation = true;
 
     if (isNearMeActive || (locLower && locLower.includes("near me"))) {
-      matchesLocation = doc.isSameCity || (doc.distanceKm !== null && doc.distanceKm <= 160);
+      // In Near Me mode, all doctors are shown sorted strictly by distance ascending!
+      matchesLocation = true;
     } else if (locLower) {
       matchesLocation =
         city.includes(locLower) ||
@@ -472,7 +664,7 @@ export default function PatientDoctors() {
     return matchesKeyword && matchesSpecialty && matchesLocation;
   });
 
-  // Sort by distance when Near Me is active
+  // Sort by distance when Near Me is active (lowest distance first)
   if (isNearMeActive || (locationSearch || "").toLowerCase().includes("near me")) {
     filteredDoctors.sort((a, b) => {
       if (a.distanceKm === null) return 1;
@@ -498,6 +690,8 @@ export default function PatientDoctors() {
     setSelectedSpecialty("All");
     setLocationSearch("");
     setIsNearMeActive(false);
+    setUserCoords(null);
+    setUserCity("");
     setCurrentPage(1);
   };
 
@@ -631,6 +825,8 @@ export default function PatientDoctors() {
                 onClick={() => {
                   setLocationSearch("");
                   setIsNearMeActive(false);
+                  setUserCoords(null);
+                  setUserCity("");
                   setCurrentPage(1);
                 }}
                 aria-label="Clear location filter"
@@ -652,42 +848,164 @@ export default function PatientDoctors() {
         </div>
 
         {/* ── SPECIALTY PILLS SCROLLER ── */}
-        <div className="pd-specialty-bar">
-          <span className="pd-specialty-lbl">Specialty:</span>
-          <div className="pd-specialty-scroll">
-            {specialtyCategories.map((spec) => {
-              const IconComp = spec.icon;
-              const isActive = selectedSpecialty === spec.id;
-              return (
-                <button
-                  key={spec.id}
-                  type="button"
-                  className={`pd-spec-chip ${isActive ? "active" : ""}`}
-                  onClick={() => {
-                    setSelectedSpecialty(spec.id);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <IconComp className="pd-spec-chip-icon" />
-                  <span>{spec.label}</span>
-                </button>
-              );
-            })}
+        <div className={`pd-specialty-bar ${isSpecialtiesExpanded ? "expanded" : ""}`}>
+          <div className="pd-specialty-header">
+            <span className="pd-specialty-lbl">
+              <FaStethoscope className="pd-spec-lbl-icon" />
+              Specialty
+            </span>
           </div>
+
+          <div className="pd-specialty-scroll-wrapper">
+            {!isSpecialtiesExpanded && specialtyCategories.length > 5 && (
+              <button
+                type="button"
+                className="pd-scroll-arrow-btn left"
+                onClick={() => scrollSpecialties("left")}
+                title="Scroll left"
+                aria-label="Scroll left"
+              >
+                <FaChevronLeft />
+              </button>
+            )}
+
+            <div
+              ref={specialtyScrollRef}
+              className={`pd-specialty-scroll ${isSpecialtiesExpanded ? "expanded" : ""}`}
+            >
+              {specialtyCategories.map((spec) => {
+                const IconComp = spec.icon;
+                const isActive =
+                  selectedSpecialty.toLowerCase() === spec.id.toLowerCase() ||
+                  (spec.id === "All" && selectedSpecialty === "All");
+                return (
+                  <button
+                    key={spec.id}
+                    type="button"
+                    className={`pd-spec-chip ${isActive ? "active" : ""}`}
+                    onClick={() => {
+                      setSelectedSpecialty(isActive && spec.id !== "All" ? "All" : spec.id);
+                      setCurrentPage(1);
+                    }}
+                    title={`Filter by ${spec.label} (${spec.count} doctor${spec.count === 1 ? "" : "s"})`}
+                  >
+                    <IconComp className="pd-spec-chip-icon" />
+                    <span className="pd-spec-chip-label">{spec.label}</span>
+                    <span className="pd-spec-chip-badge">{spec.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {!isSpecialtiesExpanded && specialtyCategories.length > 5 && (
+              <button
+                type="button"
+                className="pd-scroll-arrow-btn right"
+                onClick={() => scrollSpecialties("right")}
+                title="Scroll right"
+                aria-label="Scroll right"
+              >
+                <FaChevronRight />
+              </button>
+            )}
+          </div>
+
+          {specialtyCategories.length > 6 && (
+            <button
+              type="button"
+              className={`pd-expand-specialties-btn ${isSpecialtiesExpanded ? "active" : ""}`}
+              onClick={() => setIsSpecialtiesExpanded(!isSpecialtiesExpanded)}
+              title={isSpecialtiesExpanded ? "Collapse to single row" : "View all specialties in grid"}
+            >
+              <span>{isSpecialtiesExpanded ? "Show Less" : `View All (${specialtyCategories.length - 1})`}</span>
+              {isSpecialtiesExpanded ? <FaChevronUp /> : <FaChevronDown />}
+            </button>
+          )}
         </div>
 
         {/* Active Filters Summary Strip */}
         {hasActiveFilters && (
           <div className="pd-active-filter-strip">
-            <span className="pd-filter-status-text">
-              Showing filtered results ({filteredDoctors.length} found)
-            </span>
+            <div className="pd-filter-strip-left">
+              <span className="pd-filter-pill-tag">
+                <FaFilter /> Filter Active
+              </span>
+              <span className="pd-filter-status-text">
+                Showing <strong>{filteredDoctors.length}</strong> of <strong>{doctors.length}</strong> doctors
+              </span>
+              {selectedSpecialty !== "All" && (
+                <span className="pd-applied-badge">
+                  Specialty: <strong>{selectedSpecialty}</strong>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSpecialty("All");
+                      setCurrentPage(1);
+                    }}
+                    className="pd-applied-remove"
+                    title="Remove specialty filter"
+                  >
+                    <FaTimes />
+                  </button>
+                </span>
+              )}
+              {searchTerm && (
+                <span className="pd-applied-badge">
+                  Search: <strong>{searchTerm}</strong>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setCurrentPage(1);
+                    }}
+                    className="pd-applied-remove"
+                    title="Clear search query"
+                  >
+                    <FaTimes />
+                  </button>
+                </span>
+              )}
+              {locationSearch && (
+                <span className="pd-applied-badge">
+                  Location: <strong>{locationSearch}</strong>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocationSearch("");
+                      setCurrentPage(1);
+                    }}
+                    className="pd-applied-remove"
+                    title="Clear location"
+                  >
+                    <FaTimes />
+                  </button>
+                </span>
+              )}
+              {isNearMeActive && (
+                <span className="pd-applied-badge">
+                  <strong>Near Me</strong>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsNearMeActive(false);
+                      setUserCoords(null);
+                      setUserCity("");
+                      setLocationSearch("");
+                    }}
+                    className="pd-applied-remove"
+                    title="Disable near me"
+                  >
+                    <FaTimes />
+                  </button>
+                </span>
+              )}
+            </div>
             <button
               type="button"
               className="pd-reset-strip-btn"
               onClick={handleResetFilters}
             >
-              <FaUndo /> Reset all filters
+              <FaUndo /> Reset all
             </button>
           </div>
         )}
@@ -737,21 +1055,22 @@ export default function PatientDoctors() {
             </div>
           ) : (
             currentDoctors.map((d) => {
-              const bookedAppointment = bookedDoctors.find((b) => b.doctorId === d.id);
-              const isBooked = Boolean(bookedAppointment);
+              const activeAppointment = getActiveDoctorBooking(d.id);
+              const pastAppointment = !activeAppointment ? getPastDoctorBooking(d.id) : null;
+              const isDoctorBooked = Boolean(activeAppointment);
               const specColor = getSpecialtyColor(d.specialty);
               const conditionsTreated = getDoctorTreats(d);
 
               const selectedDate =
                 selectedDates[d.id] ||
-                (bookedAppointment ? bookedAppointment.date.split("T")[0] : "");
+                (activeAppointment ? activeAppointment.date.split("T")[0] : "");
 
               const selectedTime =
                 selectedTimes[d.id] ||
-                (bookedAppointment?.time
-                  ? bookedAppointment.time.includes("T")
-                    ? new Date(bookedAppointment.time).toTimeString().slice(0, 5)
-                    : bookedAppointment.time.slice(0, 5)
+                (activeAppointment?.time
+                  ? activeAppointment.time.includes("T")
+                    ? new Date(activeAppointment.time).toTimeString().slice(0, 5)
+                    : activeAppointment.time.slice(0, 5)
                   : "");
 
               return (
@@ -800,8 +1119,12 @@ export default function PatientDoctors() {
                           </div>
 
                           {d.distanceKm !== null && d.distanceKm !== undefined && (
-                            <div className="pd-distance-pill">
-                              <span><FaMapMarkerAlt style={{ marginRight: 4 }} />{d.distanceKm} km away</span>
+                            <div className={`pd-distance-pill ${d.distanceKm <= 50 ? "near" : "far"}`}>
+                              <span>
+                                <FaMapMarkerAlt style={{ marginRight: 4 }} />
+                                {d.distanceKm < 1 ? "< 1 km away" : `${d.distanceKm} km away`}
+                                {d.distanceKm <= 35 ? " · Nearby" : ""}
+                              </span>
                             </div>
                           )}
 
@@ -831,10 +1154,25 @@ export default function PatientDoctors() {
                   {/* Right: Appointment Slot Booking Box */}
                   <div className="pd-booking-box">
                     <div className="pd-booking-header">
-                      <span className={`pd-status-pill ${isBooked ? "booked" : "available"}`}>
+                      <span className={`pd-status-pill ${isDoctorBooked ? "booked" : "available"}`}>
                         <span className="pd-status-indicator-dot" />
-                        {isBooked ? "Appointment Confirmed" : "Available Today"}
+                        {isDoctorBooked ? "Upcoming Confirmed" : "Available Today"}
                       </span>
+                      {!isDoctorBooked && pastAppointment && (
+                        <span
+                          className="pd-past-visit-tag"
+                          style={{
+                            fontSize: "11px",
+                            color: "#64748b",
+                            fontWeight: "600",
+                            background: "#f1f5f9",
+                            padding: "2px 8px",
+                            borderRadius: "6px",
+                          }}
+                        >
+                          Last Visit: {formatDateToDDMMYYYY(pastAppointment.date)}
+                        </span>
+                      )}
                     </div>
 
                     <div className="pd-slots-form">
@@ -850,7 +1188,7 @@ export default function PatientDoctors() {
                           onChange={(e) =>
                             setSelectedDates({ ...selectedDates, [d.id]: e.target.value })
                           }
-                          disabled={isBooked}
+                          disabled={isDoctorBooked}
                         />
                       </div>
 
@@ -870,18 +1208,18 @@ export default function PatientDoctors() {
                           onChange={(e) =>
                             setSelectedTimes({ ...selectedTimes, [d.id]: e.target.value })
                           }
-                          disabled={isBooked}
+                          disabled={isDoctorBooked}
                         />
                       </div>
                     </div>
 
                     <button
                       type="button"
-                      className={`pd-book-btn ${isBooked ? "confirmed" : ""}`}
+                      className={`pd-book-btn ${isDoctorBooked ? "confirmed" : ""}`}
                       onClick={() => handleBook(d.id)}
-                      disabled={isBooked}
+                      disabled={isDoctorBooked}
                     >
-                      {isBooked ? (
+                      {isDoctorBooked ? (
                         <>
                           <FaCheckCircle /> Confirmed Appointment
                         </>
@@ -892,16 +1230,35 @@ export default function PatientDoctors() {
                       )}
                     </button>
 
-                    {isBooked && (
-                      <a
-                        href={makeGoogleCalendarUrl(d, selectedDate, selectedTime)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="pd-cal-link-btn"
-                        title="Add to Google Calendar for phone alerts"
-                      >
-                        <FaCalendarAlt /> Add to Google Calendar
-                      </a>
+                    {isDoctorBooked && (
+                      <>
+                        <a
+                          href={makeGoogleCalendarUrl(d, selectedDate, selectedTime)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="pd-cal-link-btn"
+                          title="Add to Google Calendar for phone alerts"
+                        >
+                          <FaCalendarAlt /> Add to Google Calendar
+                        </a>
+                        <button
+                          type="button"
+                          className="pd-book-another-btn"
+                          style={{
+                            marginTop: "8px",
+                            background: "transparent",
+                            border: "none",
+                            color: "#0284c7",
+                            fontSize: "12px",
+                            fontWeight: "750",
+                            cursor: "pointer",
+                            textAlign: "center",
+                          }}
+                          onClick={() => openBookingModal(d)}
+                        >
+                          + Book Another Appointment
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -926,24 +1283,25 @@ export default function PatientDoctors() {
               </thead>
               <tbody>
                 {currentDoctors.map((d) => {
-                  const bookedAppointment = bookedDoctors.find((b) => b.doctorId === d.id);
-                  const isBooked = Boolean(bookedAppointment);
+                  const activeAppointment = getActiveDoctorBooking(d.id);
+                  const pastAppointment = !activeAppointment ? getPastDoctorBooking(d.id) : null;
+                  const isDoctorBooked = Boolean(activeAppointment);
                   const specColor = getSpecialtyColor(d.specialty);
 
                   const selectedDate =
                     selectedDates[d.id] ||
-                    (bookedAppointment ? bookedAppointment.date.split("T")[0] : "");
+                    (activeAppointment ? activeAppointment.date.split("T")[0] : "");
 
                   const selectedTime =
                     selectedTimes[d.id] ||
-                    (bookedAppointment?.time
-                      ? bookedAppointment.time.includes("T")
-                        ? new Date(bookedAppointment.time).toTimeString().slice(0, 5)
-                        : bookedAppointment.time.slice(0, 5)
+                    (activeAppointment?.time
+                      ? activeAppointment.time.includes("T")
+                        ? new Date(activeAppointment.time).toTimeString().slice(0, 5)
+                        : activeAppointment.time.slice(0, 5)
                       : "");
 
                   return (
-                    <tr key={d.id} className={isBooked ? "row-booked" : ""}>
+                    <tr key={d.id} className={isDoctorBooked ? "row-booked" : ""}>
                       <td>
                         <div className="pd-table-doc-cell">
                           <div
@@ -984,7 +1342,7 @@ export default function PatientDoctors() {
                             <FaMapMarkerAlt className="loc-pin-icon" />
                             {d.address || d.city || "Ahmedabad"}
                             {d.distanceKm !== null && d.distanceKm !== undefined
-                              ? ` · ${d.distanceKm} km away`
+                              ? ` · ${d.distanceKm < 1 ? "< 1 km away" : `${d.distanceKm} km away`}${d.distanceKm <= 35 ? " (Nearby)" : ""}`
                               : ""}
                           </span>
                         </div>
@@ -997,23 +1355,42 @@ export default function PatientDoctors() {
                       </td>
                       <td>
                         <div className="pd-table-action-cell">
-                          {isBooked ? (
+                          {isDoctorBooked ? (
                             <div className="pd-table-booked-group">
                               <span className="pd-table-confirmed-tag">
                                 <FaCheckCircle /> Confirmed
                               </span>
                               <span className="pd-table-slot-text">
-                                {selectedDate} · {selectedTime}
+                                {selectedDate} · {formatTimeTo12Hour(selectedTime)}
                               </span>
-                              <a
-                                href={makeGoogleCalendarUrl(d, selectedDate, selectedTime)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="pd-table-gcal-link"
-                                title="Add to Google Calendar"
-                              >
-                                <FaCalendarAlt /> Sync
-                              </a>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <a
+                                  href={makeGoogleCalendarUrl(d, selectedDate, selectedTime)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="pd-table-gcal-link"
+                                  title="Add to Google Calendar"
+                                >
+                                  <FaCalendarAlt /> Sync
+                                </a>
+                                <button
+                                  type="button"
+                                  style={{
+                                    background: "#e0f2fe",
+                                    border: "none",
+                                    color: "#0284c7",
+                                    fontSize: "11px",
+                                    fontWeight: "750",
+                                    padding: "3px 8px",
+                                    borderRadius: "6px",
+                                    cursor: "pointer",
+                                  }}
+                                  onClick={() => openBookingModal(d)}
+                                  title="Book another appointment on a different date"
+                                >
+                                  + Book
+                                </button>
+                              </div>
                             </div>
                           ) : (
                             <button
@@ -1069,6 +1446,9 @@ export default function PatientDoctors() {
                 <p className="pd-modal-clinic">
                   <FaMapMarkerAlt /> {modalDoctor.clinicName || "CareScribe Clinic"}, {modalDoctor.city || "Ahmedabad"}
                 </p>
+                <p className="pd-modal-clinic" style={{ marginTop: "4px", color: "#0284c7" }}>
+                  <FaClock /> OPD Timing: <strong>{modalDoctor.timing || "09:00 AM - 08:00 PM"}</strong>
+                </p>
               </div>
             </div>
 
@@ -1083,27 +1463,53 @@ export default function PatientDoctors() {
                   className="pd-modal-input"
                   min={getTodayDateStr()}
                   value={modalDate}
-                  onChange={(e) => setModalDate(e.target.value)}
+                  onChange={(e) => {
+                    setModalDate(e.target.value);
+                    setModalTime("");
+                  }}
                   disabled={isSubmittingModal}
                 />
               </div>
 
               <div className="pd-modal-field">
                 <label>
-                  <FaClock /> Consultation Time
+                  <FaClock /> Consultation Time Slot
                 </label>
-                <input
-                  type="time"
+                <select
                   className="pd-modal-input"
-                  min={
-                    modalDate === getTodayDateStr()
-                      ? getCurrentTimeStr()
-                      : undefined
-                  }
                   value={modalTime}
                   onChange={(e) => setModalTime(e.target.value)}
                   disabled={isSubmittingModal}
-                />
+                >
+                  <option value="">
+                    {!modalDate
+                      ? "-- First Choose Date --"
+                      : loadingModalSlots
+                      ? "-- Checking Doctor Availability... --"
+                      : "-- Choose Time Slot --"}
+                  </option>
+                  {generateDoctorSlots(modalDoctor.timing).map((slot) => {
+                    const isSlotBooked =
+                      modalBookedSlots.includes(slot.value) ||
+                      modalBookedSlots.includes(slot.label);
+                    const isPast = isSlotPastForToday(modalDate, slot.value);
+                    const isDisabled = isSlotBooked || isPast;
+
+                    let statusNote = "";
+                    if (isSlotBooked) statusNote = " (Booked)";
+                    else if (isPast) statusNote = " (Passed)";
+
+                    return (
+                      <option
+                        key={slot.value}
+                        value={slot.value}
+                        disabled={isDisabled}
+                      >
+                        {slot.label} - {slot.period} Slot{statusNote}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
             </div>
 

@@ -1023,7 +1023,63 @@ export default function ConsultationNote({ patient }) {
               {/* ── TAB: NEW CONSULTATION ── */}
               {activeTab === "new" && (
                 <>
-                  <div className="cn-content">
+                  {/* Fixed Header Toolbar for Step 2 */}
+                  {currentStep === 2 && (
+                    <div className="cn-step2-toolbar-bar">
+                      <div className="cn-toolbar">
+                        <div className="cn-segmented">
+                          <button
+                            type="button"
+                            className={`cn-seg-btn ${transcriptView === "cards" ? "active" : ""}`}
+                            onClick={() => setTranscriptView("cards")}
+                          >
+                            <FaComments /> Dialogue Cards ({dialogueTurns.length})
+                          </button>
+                          <button
+                            type="button"
+                            className={`cn-seg-btn ${transcriptView === "raw" ? "active" : ""}`}
+                            onClick={() => setTranscriptView("raw")}
+                          >
+                            <FaEdit /> Raw Text
+                          </button>
+                        </div>
+
+                        <div className="cn-toolbar-actions">
+                          <button
+                            type="button"
+                            className="speaker-badge-btn speaker-btn-doctor"
+                            onClick={() => handleAddTurn("Doctor")}
+                            title="Add a Doctor dialogue statement"
+                          >
+                            <FaPlus size={10} /> <FaUserMd /> Doctor Says
+                          </button>
+                          <button
+                            type="button"
+                            className="speaker-badge-btn speaker-btn-patient"
+                            onClick={() => handleAddTurn("Patient")}
+                            title="Add a Patient dialogue statement"
+                          >
+                            <FaPlus size={10} /> <FaUser /> Patient Says
+                          </button>
+                          <button
+                            type="button"
+                            className="turn-action-btn"
+                            onClick={() =>
+                              copyToClipboard(
+                                dialogueTurns.length > 0 ? serializeDialogue(dialogueTurns) : transcript,
+                                "Transcript"
+                              )
+                            }
+                            title="Copy conversation transcript"
+                          >
+                            <FaCopy size={11} /> Copy
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className={`cn-content ${currentStep === 2 ? "cn-content-step2" : ""}`}>
                     {loading && (
                       <div className="cn-loading-banner">
                         <div className="loading-dots">
@@ -1276,57 +1332,6 @@ export default function ConsultationNote({ patient }) {
                     {/* STEP 2: REVIEW & EDIT TRANSCRIPT */}
                     {currentStep === 2 && (
                       <>
-                        <div className="cn-toolbar">
-                          <div className="cn-segmented">
-                            <button
-                              type="button"
-                              className={`cn-seg-btn ${transcriptView === "cards" ? "active" : ""}`}
-                              onClick={() => setTranscriptView("cards")}
-                            >
-                              <FaComments /> Dialogue Cards ({dialogueTurns.length})
-                            </button>
-                            <button
-                              type="button"
-                              className={`cn-seg-btn ${transcriptView === "raw" ? "active" : ""}`}
-                              onClick={() => setTranscriptView("raw")}
-                            >
-                              <FaEdit /> Raw Text
-                            </button>
-                          </div>
-
-                          <div className="cn-toolbar-actions">
-                            <button
-                              type="button"
-                              className="speaker-badge-btn speaker-btn-doctor"
-                              onClick={() => handleAddTurn("Doctor")}
-                              title="Add a Doctor dialogue statement"
-                            >
-                              <FaPlus size={10} /> <FaUserMd /> Doctor Says
-                            </button>
-                            <button
-                              type="button"
-                              className="speaker-badge-btn speaker-btn-patient"
-                              onClick={() => handleAddTurn("Patient")}
-                              title="Add a Patient dialogue statement"
-                            >
-                              <FaPlus size={10} /> <FaUser /> Patient Says
-                            </button>
-                            <button
-                              type="button"
-                              className="turn-action-btn"
-                              onClick={() =>
-                                copyToClipboard(
-                                  dialogueTurns.length > 0 ? serializeDialogue(dialogueTurns) : transcript,
-                                  "Transcript"
-                                )
-                              }
-                              title="Copy conversation transcript"
-                            >
-                              <FaCopy size={11} /> Copy
-                            </button>
-                          </div>
-                        </div>
-
                         {transcriptView === "cards" && (
                           <div className="cn-turn-list">
                             {dialogueTurns.length === 0 ? (
@@ -1348,12 +1353,12 @@ export default function ConsultationNote({ patient }) {
                                         <div className={`cn-turn-avatar ${roleClass}`}>
                                           {isDoc ? <FaUserMd /> : <FaUser />}
                                         </div>
-                                        <div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                           <span className="cn-turn-label">
-                                            {isDoc ? "DOCTOR SAYS:" : isPat ? "PATIENT SAYS:" : "CAREGIVER SAYS:"}
+                                            {isDoc ? "Doctor" : (patient?.name || "Patient")}
                                           </span>
                                           <span className="cn-turn-sub">
-                                            {isDoc ? "(Attending Doctor)" : `(${patient?.name || "Patient"})`}
+                                            {isDoc ? "(Attending)" : "(Patient)"}
                                           </span>
                                         </div>
                                       </div>
@@ -1363,23 +1368,23 @@ export default function ConsultationNote({ patient }) {
                                           type="button"
                                           className="turn-action-btn"
                                           onClick={() => handleToggleSpeaker(idx)}
-                                          title="Switch speaker between Doctor and Patient"
+                                          title={`Switch speaker to ${isDoc ? (patient?.name || "Patient") : "Doctor"}`}
                                         >
-                                          <FaExchangeAlt size={10} /> Switch to {isDoc ? "Patient" : "Doctor"}
+                                          <FaExchangeAlt size={10} /> Switch
                                         </button>
                                         <button
                                           type="button"
                                           className="turn-action-btn"
                                           onClick={() => handleAddTurn(isDoc ? "Patient" : "Doctor", idx)}
-                                          title={`Insert ${isDoc ? "Patient" : "Doctor"} reply directly after this`}
+                                          title={`Insert ${isDoc ? "Patient" : "Doctor"} reply after this`}
                                         >
-                                          <FaPlus size={10} /> {isDoc ? "Patient Reply" : "Doctor Reply"}
+                                          <FaPlus size={10} /> Reply
                                         </button>
                                         <button
                                           type="button"
                                           className="turn-action-btn delete-btn"
                                           onClick={() => handleDeleteTurn(idx)}
-                                          title="Delete this turn"
+                                          title="Delete this dialogue turn"
                                         >
                                           <FaTrash size={10} />
                                         </button>
@@ -1390,8 +1395,8 @@ export default function ConsultationNote({ patient }) {
                                       className="cn-turn-textarea"
                                       value={turn.text}
                                       onChange={(e) => handleUpdateTurnText(idx, e.target.value)}
-                                      placeholder={isDoc ? "Enter what the doctor said..." : "Enter what the patient said..."}
-                                      rows={Math.max(2, Math.ceil((turn.text?.length || 0) / 75))}
+                                      placeholder={isDoc ? "What did the doctor say?..." : "What did the patient say?..."}
+                                      rows={Math.max(1, Math.ceil((turn.text?.length || 0) / 95))}
                                     />
                                   </div>
                                 );

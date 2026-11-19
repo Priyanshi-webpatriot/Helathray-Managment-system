@@ -9,6 +9,13 @@ import {
   FaArrowLeft, FaChevronLeft, FaChevronRight, FaUserMd, FaUserInjured, FaExclamationCircle,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
+import {
+  generateDoctorSlots,
+  isSlotPastForToday,
+  formatTimeTo12Hour,
+  formatDateToDDMMYYYY,
+  getTodayDateStr,
+} from "../utils/slotHelper";
 
 export default function Appointments() {
   const navigate = useNavigate();
@@ -34,6 +41,8 @@ export default function Appointments() {
     date: "",
     time: "",
   });
+  const [bookedSlots, setBookedSlots] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   const fetchPatients = async () => {
     try {
@@ -81,20 +90,35 @@ export default function Appointments() {
     fetchAppointments();
   }, [page]);
 
-  const getTodayDateStr = () => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
+  useEffect(() => {
+    if (!form.doctorId || !form.date) {
+      setBookedSlots([]);
+      return;
+    }
 
-  const getCurrentTimeStr = () => {
-    const d = new Date();
-    const hours = String(d.getHours()).padStart(2, "0");
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    return `${hours}:${minutes}`;
-  };
+    let isCancelled = false;
+    setLoadingSlots(true);
+    API.get(`/patient-appointments/booked-slots?doctorId=${form.doctorId}&date=${form.date}`)
+      .then((res) => {
+        if (!isCancelled) {
+          setBookedSlots(res.data?.bookedSlots || []);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load doctor slots:", err);
+        if (!isCancelled) setBookedSlots([]);
+      })
+      .finally(() => {
+        if (!isCancelled) setLoadingSlots(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [form.doctorId, form.date]);
+
+  const selectedDoctorObj = doctors.find((d) => String(d.id) === String(form.doctorId));
+  const dynamicDoctorSlots = selectedDoctorObj ? generateDoctorSlots(selectedDoctorObj.timing) : [];
 
   const validate = () => {
     let newErrors = {};
@@ -107,8 +131,10 @@ export default function Appointments() {
     }
     if (!form.time) {
       newErrors.time = "Time is required";
-    } else if (form.date === getTodayDateStr() && form.time <= getCurrentTimeStr()) {
+    } else if (isSlotPastForToday(form.date, form.time)) {
       newErrors.time = "Cannot select a past time for today";
+    } else if (bookedSlots.includes(form.time)) {
+      newErrors.time = "This time slot is already booked for this doctor";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -247,16 +273,56 @@ export default function Appointments() {
             <label className="appt-form-label">
               <BsClock /> Time Slot
             </label>
-            <input
-              type="time"
-              className="appt-form-input"
-              min={form.date === getTodayDateStr() ? getCurrentTimeStr() : undefined}
-              value={form.time}
-              onChange={(e) => {
-                setForm({ ...form, time: e.target.value });
-                setErrors({ ...errors, time: "" });
-              }}
-            />
+            {form.doctorId ? (
+              <select
+                className="appt-form-input"
+                value={form.time}
+                onChange={(e) => {
+                  setForm({ ...form, time: e.target.value });
+                  setErrors({ ...errors, time: "" });
+                }}
+              >
+                <option value="">
+                  {!form.date
+                    ? "-- First Choose Date --"
+                    : loadingSlots
+                    ? "-- Checking OPD Availability... --"
+                    : "-- Choose OPD Time Slot --"}
+                </option>
+                {dynamicDoctorSlots.map((slot) => {
+                  const isSlotBooked =
+                    bookedSlots.includes(slot.value) ||
+                    bookedSlots.includes(slot.label);
+                  const isPast = isSlotPastForToday(form.date, slot.value);
+                  const isDisabled = isSlotBooked || isPast;
+
+                  let statusNote = "";
+                  if (isSlotBooked) statusNote = " (Booked)";
+                  else if (isPast) statusNote = " (Passed)";
+
+                  return (
+                    <option
+                      key={slot.value}
+                      value={slot.value}
+                      disabled={isDisabled}
+                    >
+                      {slot.label} - {slot.period} Slot{statusNote}
+                    </option>
+                  );
+                })}
+              </select>
+            ) : (
+              <input
+                type="time"
+                className="appt-form-input"
+                value={form.time}
+                onChange={(e) => {
+                  setForm({ ...form, time: e.target.value });
+                  setErrors({ ...errors, time: "" });
+                }}
+                placeholder="Choose doctor first"
+              />
+            )}
             {errors.time && (
               <span className="appt-field-error"><FaExclamationCircle style={{ marginRight: 4, fontSize: 11 }} />{errors.time}</span>
             )}
@@ -336,17 +402,13 @@ export default function Appointments() {
                     <td>
                       <div className="appt-date-cell">
                         <BsCalendarCheck />
-                        {new Date(a.date).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
+                        {formatDateToDDMMYYYY(a.date)}
                       </div>
                     </td>
                     <td>
                       <div className="appt-date-cell">
                         <BsClock />
-                        {a.time || "—"}
+                        {formatTimeTo12Hour(a.time) || "—"}
                       </div>
                     </td>
                     <td>

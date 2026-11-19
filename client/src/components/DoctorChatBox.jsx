@@ -83,6 +83,80 @@ export default function DoctorChatBox({ patient }) {
   };
 
   // =========================
+  // CLEAR DOCTOR CHATS
+  // =========================
+  const clearDoctorChatHistory = () => {
+    toast(
+      ({ closeToast }) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <span style={{ fontSize: "13.5px", fontWeight: "600", color: "#1e293b" }}>
+            Clear chat history with AI Assistant for {patient?.name || "this patient"}?
+          </span>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+            <button
+              onClick={closeToast}
+              style={{
+                padding: "5px 12px",
+                borderRadius: "6px",
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                color: "#475569",
+                fontSize: "12px",
+                fontWeight: "600",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                closeToast();
+                try {
+                  if (!patient?.id) return;
+                  const user = JSON.parse(localStorage.getItem("user"));
+                  await API.delete(`/chat/doctor?patientId=${patient.id}`, {
+                    headers: {
+                      role: "doctor",
+                      userid: user?.id,
+                    },
+                  });
+                  setChat([
+                    {
+                      type: "bot",
+                      text: `Hello Doctor. I am your Clinical Assistant for **${patient.name}** (${patient.age ? `${patient.age} yrs` : "Age N/A"}, ${patient.gender || "Gender N/A"}, Blood: ${patient.bloodGroup || "N/A"}).\n\nAsk me any specific question about this patient's symptoms, medication dosages, drug interactions, or diagnostic recommendations.`,
+                    },
+                  ]);
+                  toast.success("Chat history cleared successfully!");
+                } catch (err) {
+                  console.error("Failed to clear doctor chats:", err);
+                  toast.error("Failed to clear chat history.");
+                }
+              }}
+              style={{
+                padding: "5px 12px",
+                borderRadius: "6px",
+                border: "none",
+                background: "#ef4444",
+                color: "#ffffff",
+                fontSize: "12px",
+                fontWeight: "600",
+                cursor: "pointer",
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      ),
+      {
+        autoClose: 5000,
+        closeOnClick: false,
+        draggable: false,
+      }
+    );
+  };
+
+  // =========================
   // SEND MESSAGE
   // =========================
 
@@ -187,23 +261,22 @@ export default function DoctorChatBox({ patient }) {
             </div>
             <button
               type="button"
-              onClick={() => setIsOpen(false)}
-              title="Close AI Assistant"
+              className="clear-chat-btn"
+              onClick={clearDoctorChatHistory}
+              title="Clear clinical chat history for this patient"
               style={{
-                background: "rgba(255,255,255,0.2)",
-                border: "none",
+                background: "rgba(255, 255, 255, 0.18)",
+                border: "1px solid rgba(255, 255, 255, 0.35)",
                 color: "#ffffff",
-                width: "26px",
-                height: "26px",
-                borderRadius: "50%",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
+                padding: "4px 10px",
+                borderRadius: "8px",
+                fontSize: "11.5px",
+                fontWeight: "700",
                 cursor: "pointer",
-                fontSize: "13px",
+                transition: "all 0.2s ease",
               }}
             >
-              <FaTimes />
+              Clear Chat
             </button>
           </div>
 

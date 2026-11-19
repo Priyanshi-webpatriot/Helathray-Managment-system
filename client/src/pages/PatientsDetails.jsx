@@ -6,9 +6,10 @@ import "../styles/consultation.css";
 import DoctorChatBox from "../components/DoctorChatBox.jsx";
 import ConsultationNote from "../components/ConsultationNote.jsx";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FaArrowLeft, FaChevronLeft, FaChevronRight, FaTimes, FaUserInjured } from "react-icons/fa";
+import { FaArrowLeft, FaChevronLeft, FaChevronRight, FaTimes, FaUserInjured, FaNotesMedical, FaExpandAlt, FaCopy } from "react-icons/fa";
 import { BsActivity, BsInbox } from "react-icons/bs";
 import { HiOutlineSparkles } from "react-icons/hi";
+import { toast } from "react-toastify";
 
 export default function PatientsDetails() {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ export default function PatientsDetails() {
 
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [viewingNotePatient, setViewingNotePatient] = useState(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -134,7 +136,17 @@ export default function PatientsDetails() {
                       </span>
                     </td>
                     <td>
-                      <span className="notes-snippet">{p.medicalNotes || "—"}</span>
+                      {p.medicalNotes ? (
+                        <span
+                          className="notes-snippet notes-clickable"
+                          onClick={() => setViewingNotePatient(p)}
+                          title="Click to view full clinical note"
+                        >
+                          {p.medicalNotes}
+                        </span>
+                      ) : (
+                        <span className="table-cell-muted">—</span>
+                      )}
                     </td>
                     <td>
                       <span className="table-cell-muted">{p.user?.email || "—"}</span>
@@ -209,6 +221,59 @@ export default function PatientsDetails() {
 
       {/* Doctor AI Assistant is always present on this page */}
       <DoctorChatBox patient={selectedPatient} />
+
+      {/* Clinical Note Full View Modal */}
+      {viewingNotePatient && (
+        <div className="clinical-note-modal-overlay" onClick={() => setViewingNotePatient(null)}>
+          <div className="clinical-note-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="clinical-note-modal-header">
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div className="clinical-note-modal-icon">
+                  <FaNotesMedical />
+                </div>
+                <div>
+                  <h3>Patient Clinical Medical Note</h3>
+                  <p className="clinical-note-modal-subtitle">
+                    Patient: <strong>{viewingNotePatient.name}</strong> • {viewingNotePatient.age} yrs • {viewingNotePatient.gender} • Blood Group: <strong style={{ color: "#dc2626" }}>{viewingNotePatient.bloodGroup || "N/A"}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setViewingNotePatient(null)}
+                title="Close"
+              >
+                <FaTimes />
+              </button>
+            </div>
+            <div className="clinical-note-modal-body">
+              <div className="clinical-note-content-box">
+                <p style={{ margin: 0 }}>{viewingNotePatient.medicalNotes || "No clinical notes recorded."}</p>
+              </div>
+            </div>
+            <div className="clinical-note-modal-footer">
+              <button
+                type="button"
+                className="btn-copy-note"
+                onClick={() => {
+                  navigator.clipboard.writeText(viewingNotePatient.medicalNotes || "");
+                  toast.success("Clinical note copied to clipboard");
+                }}
+              >
+                <FaCopy /> Copy Note
+              </button>
+              <button
+                type="button"
+                className="btn-close-modal"
+                onClick={() => setViewingNotePatient(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

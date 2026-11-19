@@ -7,7 +7,7 @@ import {
   FaSearch, FaMapMarkerAlt, FaNotesMedical, FaStar, FaPhoneAlt, FaCheckCircle,
   FaTooth, FaBone, FaBrain, FaCapsules, FaStethoscope, FaUserFriends, FaRegCheckCircle,
   FaThermometerHalf, FaBaby, FaPumpSoap, FaFemale, FaShieldAlt, FaBolt, FaComments,
-  FaLock, FaBirthdayCake, FaVenusMars, FaUser, FaEnvelope, FaTint, FaIdCard, FaEdit,
+  FaLock, FaBirthdayCake, FaVenusMars, FaUser, FaEnvelope, FaTint, FaIdCard,
   FaTimes
 } from "react-icons/fa";
 import { 
@@ -27,6 +27,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import API from "../api";
+import DoctorScheduleCalendar from "../components/DoctorScheduleCalendar";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -71,6 +72,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [recentPatients, setRecentPatients] = useState([]);
   const [recentAppointments, setRecentAppointments] = useState([]);
+  const [currentDoctor, setCurrentDoctor] = useState(null);
 
   // Patient Quick Edit Profile Modal
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -198,6 +200,13 @@ export default function Dashboard() {
 
       setRecentPatients(patientList);
       setRecentAppointments(appointmentList);
+
+      if (user.role === "doctor" && doctorList.length > 0) {
+        const found = doctorList.find(
+          (d) => d.userId === user.id || String(d.name).toLowerCase() === String(user.name).toLowerCase()
+        );
+        if (found) setCurrentDoctor(found);
+      }
 
       setMetrics({
         patients: patientCount,
@@ -356,10 +365,10 @@ export default function Dashboard() {
   const maxVal = maxValueInData > 0 ? maxValueInData : 5;
 
   // SVG coordinates calculation for dynamic trend graph
-  const width = 500;
-  const height = 180;
-  const paddingX = 40;
-  const paddingY = 25;
+  const width = 750;
+  const height = 240;
+  const paddingX = 50;
+  const paddingY = 35;
 
   const points = chartData.map((d, index) => {
     const x = paddingX + (index * (width - paddingX * 2)) / (chartData.length - 1);
@@ -433,17 +442,8 @@ export default function Dashboard() {
               Find and book confirmed in-clinic appointments or consult top verified doctors online
             </p>
 
-            {/* Dual Search Bar */}
+            {/* Search Bar */}
             <form className="practo-search-container" onSubmit={handleSearchSubmit}>
-              <div 
-                className="practo-search-location" 
-                onClick={() => navigate("/patient-doctors?nearMe=true")} 
-                title="Click to find doctors near your location"
-                style={{ cursor: "pointer" }}
-              >
-                <FaMapMarkerAlt style={{ color: "#0284c7" }} />
-                <span> Doctors Near Me</span>
-              </div>
               <div className="practo-search-doctor">
                 <FaSearch />
                 <input
@@ -459,32 +459,6 @@ export default function Dashboard() {
                 Find Doctors
               </button>
             </form>
-
-            {/* Popular / Trending Health Searches */}
-            <div className="practo-trending-pills">
-              <span>Popular Searches:</span>
-              <span className="practo-trend-chip" onClick={() => navigate("/patient-doctors?nearMe=true")} style={{ background: "#e0f2fe", border: "1px solid #7dd3fc", color: "#0284c7", fontWeight: "800" }}>
-                <FaMapMarkerAlt style={{ color: "#0284c7" }} /> Doctors Near Me
-              </span>
-              <span className="practo-trend-chip" onClick={() => navigate("/patient-doctors?search=General")}>
-                <FaThermometerHalf style={{ color: "#ef4444" }} /> Fever &amp; Cold
-              </span>
-              <span className="practo-trend-chip" onClick={() => navigate("/patient-doctors?search=Cardio")}>
-                <FaHeartbeat style={{ color: "#e11d48" }} /> Heart Checkup
-              </span>
-              <span className="practo-trend-chip" onClick={() => navigate("/patient-doctors?search=Pedia")}>
-                <FaBaby style={{ color: "#f59e0b" }} /> Pediatric Care
-              </span>
-              <span className="practo-trend-chip" onClick={() => navigate("/patient-doctors?search=Derma")}>
-                <FaPumpSoap style={{ color: "#ec4899" }} /> Skin &amp; Acne
-              </span>
-              <span className="practo-trend-chip" onClick={() => navigate("/patient-doctors?search=Ortho")}>
-                <FaBone style={{ color: "#10b981" }} /> Joint &amp; Bone
-              </span>
-              <span className="practo-trend-chip" onClick={() => navigate("/patient-doctors?search=Neuro")}>
-                <FaBrain style={{ color: "#8b5cf6" }} /> Migraine &amp; Nerve
-              </span>
-            </div>
           </div>
         </section>
 
@@ -509,36 +483,9 @@ export default function Dashboard() {
                 <h2 style={{ fontSize: "24px", fontWeight: "900", color: "#0f172a", margin: "0 0 10px 0", letterSpacing: "-0.5px" }}>
                   Find Verified Clinics &amp; OPD Centers by Location
                 </h2>
-                <p style={{ fontSize: "14px", color: "#64748b", margin: "0 0 24px 0", lineHeight: "1.6" }}>
+                <p style={{ fontSize: "14px", color: "#64748b", margin: 0, lineHeight: "1.6" }}>
                   Search medical clinics by area location, filter by registered clinical specialties, and check real-time OPD consultation timings.
                 </p>
-
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
-                  <span style={{ fontSize: "12.5px", fontWeight: "800", color: "#475569" }}>Popular Cities:</span>
-                  {["Betul", "Ahmedabad", "Mumbai", "Delhi", "Pune"].map((city) => (
-                    <button
-                      key={city}
-                      type="button"
-                      onClick={() => navigate(`/find-clinics?search=${encodeURIComponent(city)}`)}
-                      style={{
-                        background: "#f1f5f9",
-                        border: "1px solid #cbd5e1",
-                        color: "#0f172a",
-                        padding: "6px 14px",
-                        borderRadius: "12px",
-                        fontSize: "12.5px",
-                        fontWeight: "700",
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        transition: "all 0.2s"
-                      }}
-                    >
-                      <FaMapMarkerAlt style={{ color: "#0284c7", fontSize: "11px" }} /> {city}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               <div style={{
@@ -627,7 +574,6 @@ export default function Dashboard() {
                   <svg
                     className="interactive-area-svg"
                     viewBox={`0 0 ${width} ${height}`}
-                    preserveAspectRatio="none"
                   >
                     <defs>
                       <linearGradient id="chartGradientPracto" x1="0" y1="0" x2="0" y2="1">
@@ -948,7 +894,7 @@ export default function Dashboard() {
           <div className="doctor-hero-inner">
             <div className="hero-eyebrow-pill">
               <span className="hero-sparkle-dot"></span>
-              <span>CareScribe Doctor Pro • Outpatient Practice Desk</span>
+              <span>CareScribe Doctor • Outpatient Desk</span>
             </div>
 
             <h1 className="doctor-hero-heading" style={{ color: "#0f172a", fontSize: "32px", fontWeight: "850", letterSpacing: "-0.6px", lineHeight: "1.25" }}>
@@ -960,10 +906,7 @@ export default function Dashboard() {
 
             {/* Hero Quick Stat Chips */}
             <div className="doctor-hero-stats-row">
-              <div className="hero-stat-chip">
-                <FaStethoscope className="stat-chip-icon" />
-                <span>OPD Desk: <strong>Live • Appointments 1 - {metrics.appointments || 10}</strong></span>
-              </div>
+             
               <div className="hero-stat-chip">
                 <BsCalendar2Check className="stat-chip-icon" />
                 <span>Today: <strong>{todayFormatted}</strong></span>
@@ -976,72 +919,12 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* ── 2. PRACTO SPECIALTY DEPT QUICK GRID ── */}
-        {/* <div style={{ marginBottom: "36px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-            <h3 style={{ fontSize: "18px", fontWeight: "800", color: "#0f172a", display: "flex", alignItems: "center", gap: "10px" }}>
-              <FaStethoscope style={{ color: "#0284c7" }} />
-              <span>Specialty Practice Departments</span>
-            </h3>
-            <span style={{ fontSize: "12.5px", color: "#64748b", fontWeight: "600" }}>CareScribe OPD Network</span>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: "16px" }}>
-            {[
-              { title: "General OPD", Icon: FaStethoscope, color: "#0284c7", bg: "#e0f2fe", count: "Active Desk" },
-              { title: "Cardiology", Icon: FaHeartbeat, color: "#ef4444", bg: "#fef2f2", count: "Heart Care" },
-              { title: "Neurology", Icon: FaBrain, color: "#8b5cf6", bg: "#f3e8ff", count: "Brain & Spine" },
-              { title: "Orthopedics", Icon: FaBone, color: "#f59e0b", bg: "#fef3c7", count: "Joint Care" },
-              { title: "Pediatrics", Icon: FaBaby, color: "#10b981", bg: "#d1fae5", count: "Child Care" },
-              { title: "Dental Care", Icon: FaTooth, color: "#06b6d4", bg: "#cff4fc", count: "Oral Surgery" },
-            ].map((spec, i) => (
-              <div 
-                key={i} 
-                onClick={() => navigate(`/appointments?specialty=${encodeURIComponent(spec.title)}`)}
-                style={{
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "22px",
-                  padding: "20px 16px",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  textAlign: "center",
-                  cursor: "pointer",
-                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                  boxShadow: "0 4px 16px -4px rgba(15, 23, 42, 0.05)"
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-5px)";
-                  e.currentTarget.style.borderColor = spec.color;
-                  e.currentTarget.style.boxShadow = `0 12px 28px -4px ${spec.color}30`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.borderColor = "#e2e8f0";
-                  e.currentTarget.style.boxShadow = "0 4px 16px -4px rgba(15, 23, 42, 0.05)";
-                }}
-              >
-                <div style={{
-                  width: "50px",
-                  height: "50px",
-                  borderRadius: "16px",
-                  background: spec.bg,
-                  color: spec.color,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "22px",
-                  marginBottom: "12px"
-                }}>
-                  <spec.Icon />
-                </div>
-                <div style={{ fontSize: "14px", fontWeight: "800", color: "#0f172a", marginBottom: "3px" }}>{spec.title}</div>
-                <div style={{ fontSize: "11.5px", color: "#64748b", fontWeight: "600" }}>{spec.count}</div>
-              </div>
-            ))}
-          </div>
-        </div> */}
+        {/* ── 2. DOCTOR OPD INTERACTIVE CLINICAL CALENDAR ── */}
+        <DoctorScheduleCalendar
+          appointments={recentAppointments}
+          doctorName={user?.name || "Doctor"}
+          doctorTiming={currentDoctor?.timing || "09:00 AM - 08:00 PM"}
+        />
 
         {/* ── 6. PRACTICE TRENDS & CLINICAL DISTRIBUTION (MATCHING USER IMAGE 2 EXACTLY) ── */}
         <div className="doctor-section-grid">
@@ -1427,7 +1310,6 @@ export default function Dashboard() {
             <svg
               className="interactive-area-svg"
               viewBox={`0 0 ${width} ${height}`}
-              preserveAspectRatio="none"
             >
               <defs>
                 <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">

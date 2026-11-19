@@ -4,12 +4,10 @@ import { toast } from "react-toastify";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   FaSearch,
-  FaThLarge,
-  FaList,
   FaMapMarkerAlt,
+  FaChevronLeft,
   FaChevronRight,
   FaCheckCircle,
-  FaStar,
   FaTimes,
   FaUndo,
   FaHospital,
@@ -20,6 +18,11 @@ import {
   FaMedkit,
   FaAward
 } from "react-icons/fa";
+import {
+  generateDoctorSlots,
+  isSlotPastForToday,
+  getTodayDateStr
+} from "../utils/slotHelper";
 import "../styles/patientWebsite.css";
 import "../styles/patientDoctors.css";
 
@@ -44,8 +47,9 @@ export default function FindClinics() {
     city: initialCity
   });
 
-  // Layout mode: 'grid' | 'list'
-  const [viewMode, setViewMode] = useState("grid");
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const clinicsPerPage = 6;
 
   // Dynamic Clinics Data fetched directly from database
   const [clinics, setClinics] = useState([]);
@@ -57,9 +61,47 @@ export default function FindClinics() {
   // Slot Booking State inside Modal
   const [bookingDate, setBookingDate] = useState("");
   const [bookingTime, setBookingTime] = useState("");
+  const [bookedSlots, setBookedSlots] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const user = JSON.parse(localStorage.getItem("user") || "null");
+
+  // Dynamically compute available slots from active doctor's OPD timing
+  const dynamicSlots = useMemo(() => {
+    if (!activeClinic?.timing) return [];
+    return generateDoctorSlots(activeClinic.timing);
+  }, [activeClinic?.timing]);
+
+  // Fetch booked slots for the selected clinic doctor on the selected date
+  useEffect(() => {
+    if (!activeClinic || !bookingDate) {
+      setBookedSlots([]);
+      return;
+    }
+
+    const docId = activeClinic.doctorId || activeClinic.id;
+    let isCancelled = false;
+    setLoadingSlots(true);
+
+    API.get(`/patient-appointments/booked-slots?doctorId=${docId}&date=${bookingDate}`)
+      .then((res) => {
+        if (!isCancelled) {
+          setBookedSlots(res.data?.bookedSlots || []);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch doctor booked slots:", err);
+        if (!isCancelled) setBookedSlots([]);
+      })
+      .finally(() => {
+        if (!isCancelled) setLoadingSlots(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeClinic, bookingDate]);
 
   // Fetch doctors & clinics dynamically from API with 0 static fallback
   const fetchDoctorsAndClinics = async () => {
@@ -125,6 +167,7 @@ export default function FindClinics() {
       specialization: selectedSpecialty,
       city: selectedCity
     });
+    setCurrentPage(1);
 
     // Sync URL parameters
     const params = new URLSearchParams();
@@ -148,6 +191,7 @@ export default function FindClinics() {
       specialization: "All Specializations",
       city: "All Cities"
     });
+    setCurrentPage(1);
     navigate("/find-clinics", { replace: true });
   };
 
@@ -174,28 +218,11 @@ export default function FindClinics() {
     return matchesName && matchesSpec && matchesCity;
   });
 
-  const getTodayDateStr = () => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
-  const isSlotPastForToday = (slotTimeStr) => {
-    if (!bookingDate || bookingDate !== getTodayDateStr()) return false;
-    const match = slotTimeStr.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
-    if (!match) return false;
-    let hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    const mod = match[3];
-    if (mod === "PM" && hours < 12) hours += 12;
-    if (mod === "AM" && hours === 12) hours = 0;
-
-    const now = new Date();
-    const slotDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
-    return slotDate.getTime() <= now.getTime();
-  };
+  // Pagination Calculation
+  const indexOfLastClinic = currentPage * clinicsPerPage;
+  const indexOfFirstClinic = indexOfLastClinic - clinicsPerPage;
+  const currentClinics = filteredClinics.slice(indexOfFirstClinic, indexOfLastClinic);
+  const totalPages = Math.ceil(filteredClinics.length / clinicsPerPage) || 1;
 
   // Handle Book Appointment inside View Clinic Modal
   const handleBookAppointment = async () => {
@@ -220,8 +247,13 @@ export default function FindClinics() {
       return;
     }
 
-    if (isSlotPastForToday(bookingTime)) {
+    if (isSlotPastForToday(bookingDate, bookingTime)) {
       toast.error("Cannot book an appointment for a past time slot. Please select an upcoming slot.");
+      return;
+    }
+
+    if (bookedSlots.includes(bookingTime)) {
+      toast.error("This time slot has already been booked. Please choose a different slot.");
       return;
     }
 
@@ -246,6 +278,7 @@ export default function FindClinics() {
       setActiveClinic(null);
       setBookingDate("");
       setBookingTime("");
+      setBookedSlots([]);
     } catch (error) {
       console.error(error);
       toast.error(error.response?.data?.error || "Failed to book appointment. Please try again.");
@@ -357,7 +390,7 @@ export default function FindClinics() {
         </div>
       </div>
 
-      {/* ── GRID / LIST VIEW TOGGLE CONTROLS ── */}
+      {/* ── CLINIC RESULTS HEADER ── */}
       <div className="find-clinics-view-header">
         <div className="view-results-count">
           Showing <strong>{filteredClinics.length}</strong> Registered OPD Clinics
@@ -365,30 +398,15 @@ export default function FindClinics() {
           {appliedFilters.specialization && appliedFilters.specialization !== "All Specializations"
             ? ` for ${appliedFilters.specialization}`
             : ""}
-        </div>
-
-        <div className="view-toggle-capsule">
-          <button
-            type="button"
-            className={`view-toggle-btn ${viewMode === "grid" ? "active" : ""}`}
-            onClick={() => setViewMode("grid")}
-          >
-            <FaThLarge />
-            <span>Grid</span>
-          </button>
-
-          <button
-            type="button"
-            className={`view-toggle-btn ${viewMode === "list" ? "active" : ""}`}
-            onClick={() => setViewMode("list")}
-          >
-            <FaList />
-            <span>List</span>
-          </button>
+          {totalPages > 1 && (
+            <span style={{ marginLeft: "8px", fontSize: "13px", color: "#64748b", fontWeight: "600" }}>
+              (Page {currentPage} of {totalPages})
+            </span>
+          )}
         </div>
       </div>
 
-      {/* ── DYNAMIC CLINIC RESULTS GRID / LIST ── */}
+      {/* ── DYNAMIC CLINIC RESULTS GRID ── */}
       {loading ? (
         <div className="find-clinics-loading">
           <div className="loading-spinner"></div>
@@ -410,50 +428,85 @@ export default function FindClinics() {
           </button>
         </div>
       ) : (
-        <div className={viewMode === "grid" ? "nexopd-grid-container" : "nexopd-list-container"}>
-          {filteredClinics.map((clinic) => (
-            <div key={clinic.id} className="nexopd-clinic-card">
-              {/* Card Top Section: Icon & Names */}
-              <div className="clinic-card-top">
-                <div className="clinic-avatar-box">
-                  <span className="clinic-initial-text">{clinic.initial}</span>
-                  <div className="clinic-check-badge" title="Verified Doctor Clinic">
-                    <FaCheckCircle />
+        <>
+          <div className="nexopd-grid-container">
+            {currentClinics.map((clinic) => (
+              <div key={clinic.id} className="nexopd-clinic-card">
+                {/* Card Top Section: Icon & Names */}
+                <div className="clinic-card-top">
+                  <div className="clinic-avatar-box">
+                    <span className="clinic-initial-text">{clinic.initial}</span>
+                    <div className="clinic-check-badge" title="Verified Doctor Clinic">
+                      <FaCheckCircle />
+                    </div>
+                  </div>
+
+                  <div className="clinic-title-meta">
+                    <h3 className="clinic-name-title">{clinic.name}</h3>
+                    <div className="clinic-spec-pill">{clinic.specialty}</div>
                   </div>
                 </div>
 
-                <div className="clinic-title-meta">
-                  <h3 className="clinic-name-title">{clinic.name}</h3>
-                  <div className="clinic-spec-pill">{clinic.specialty}</div>
+                {/* Card Location & Area Line */}
+                <div className="clinic-location-row">
+                  <FaMapMarkerAlt className="clinic-pin-icon" />
+                  <span className="clinic-location-text">
+                    {clinic.address}
+                  </span>
+                </div>
+
+                {/* Card Action: View Clinic */}
+                <div className="clinic-card-footer">
+                  <button
+                    type="button"
+                    className="view-clinic-teal-btn"
+                    onClick={() => {
+                      setActiveClinic(clinic);
+                      setBookingDate("");
+                      setBookingTime("");
+                    }}
+                  >
+                    <span>View Clinic</span>
+                    <FaChevronRight className="btn-arrow-icon" />
+                  </button>
                 </div>
               </div>
+            ))}
+          </div>
 
-              {/* Card Location & Area Line */}
-              <div className="clinic-location-row">
-                <FaMapMarkerAlt className="clinic-pin-icon" />
-                <span className="clinic-location-text">
-                  {clinic.address}
-                </span>
-              </div>
+          {/* ── PAGINATION CONTROLS ── */}
+          {filteredClinics.length > clinicsPerPage && (
+            <div className="pd-pagination-bar" style={{ marginTop: "36px" }}>
+              <button
+                type="button"
+                className="pd-page-nav-btn"
+                onClick={() => {
+                  setCurrentPage((p) => Math.max(1, p - 1));
+                  window.scrollTo({ top: 350, behavior: "smooth" });
+                }}
+                disabled={currentPage === 1}
+              >
+                <FaChevronLeft style={{ marginRight: 6 }} /> Previous
+              </button>
 
-              {/* Card Action: View Clinic */}
-              <div className="clinic-card-footer">
-                <button
-                  type="button"
-                  className="view-clinic-teal-btn"
-                  onClick={() => {
-                    setActiveClinic(clinic);
-                    setBookingDate("");
-                    setBookingTime("");
-                  }}
-                >
-                  <span>View Clinic</span>
-                  <FaChevronRight className="btn-arrow-icon" />
-                </button>
-              </div>
+              <span className="pd-page-indicator-pill">
+                Page {currentPage} of {totalPages}
+              </span>
+
+              <button
+                type="button"
+                className="pd-page-nav-btn"
+                onClick={() => {
+                  setCurrentPage((p) => Math.min(totalPages, p + 1));
+                  window.scrollTo({ top: 350, behavior: "smooth" });
+                }}
+                disabled={currentPage === totalPages}
+              >
+                Next <FaChevronRight style={{ marginLeft: 6 }} />
+              </button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
 
       {/* ── VIEW CLINIC DETAIL MODAL ── */}
@@ -503,21 +556,6 @@ export default function FindClinics() {
                 </div>
 
                 <div className="modal-info-card">
-                  <div className="info-card-icon"><FaStar style={{ color: "#f59e0b" }} /></div>
-                  <div>
-                    <span className="info-card-label">Patient Rating</span>
-                    <strong className="info-card-val" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                      {activeClinic.rating}
-                      <span style={{ color: "#f59e0b", display: "inline-flex", gap: "2px", fontSize: "12px" }}>
-                        {[...Array(5)].map((_, i) => (
-                          <FaStar key={i} />
-                        ))}
-                      </span>
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="modal-info-card">
                   <div className="info-card-icon"><FaClock /></div>
                   <div>
                     <span className="info-card-label">OPD Timings</span>
@@ -562,22 +600,34 @@ export default function FindClinics() {
                       value={bookingTime}
                       onChange={(e) => setBookingTime(e.target.value)}
                     >
-                      <option value="">-- Choose Slot --</option>
-                      <option value="10:00 AM" disabled={isSlotPastForToday("10:00 AM")}>
-                        10:00 AM - Morning Slot {isSlotPastForToday("10:00 AM") ? "(Passed)" : ""}
+                      <option value="">
+                        {!bookingDate
+                          ? "-- First Choose Date --"
+                          : loadingSlots
+                          ? "-- Checking Doctor Availability... --"
+                          : "-- Choose Slot --"}
                       </option>
-                      <option value="11:30 AM" disabled={isSlotPastForToday("11:30 AM")}>
-                        11:30 AM - Morning Slot {isSlotPastForToday("11:30 AM") ? "(Passed)" : ""}
-                      </option>
-                      <option value="02:00 PM" disabled={isSlotPastForToday("02:00 PM")}>
-                        02:00 PM - Afternoon Slot {isSlotPastForToday("02:00 PM") ? "(Passed)" : ""}
-                      </option>
-                      <option value="05:00 PM" disabled={isSlotPastForToday("05:00 PM")}>
-                        05:00 PM - Evening Slot {isSlotPastForToday("05:00 PM") ? "(Passed)" : ""}
-                      </option>
-                      <option value="07:00 PM" disabled={isSlotPastForToday("07:00 PM")}>
-                        07:00 PM - Evening Slot {isSlotPastForToday("07:00 PM") ? "(Passed)" : ""}
-                      </option>
+                      {dynamicSlots.map((slot) => {
+                        const isSlotBooked =
+                          bookedSlots.includes(slot.value) ||
+                          bookedSlots.includes(slot.label);
+                        const isPast = isSlotPastForToday(bookingDate, slot.value);
+                        const isDisabled = isSlotBooked || isPast;
+
+                        let statusNote = "";
+                        if (isSlotBooked) statusNote = " (Booked)";
+                        else if (isPast) statusNote = " (Passed)";
+
+                        return (
+                          <option
+                            key={slot.value}
+                            value={slot.value}
+                            disabled={isDisabled}
+                          >
+                            {slot.label} - {slot.period} Slot{statusNote}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 </div>

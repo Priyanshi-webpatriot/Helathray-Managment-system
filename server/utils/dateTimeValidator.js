@@ -104,3 +104,15 @@ export const parseTimeSlot = (timeStr) => {
   return null;
 };
 
+/**
+ * Normalizes any time string ("02:30 PM", "2:30pm", "14:30") into standard "HH:mm" (24-hour).
+ * @param {string} timeStr
+ * @returns {string}
+ */
+export const normalizeTimeTo24Hour = (timeStr) => {
+  const parsed = parseTimeSlot(timeStr);
+  if (!parsed) return timeStr ? String(timeStr).trim() : "";
+  return `${String(parsed.hours).padStart(2, "0")}:${String(parsed.minutes).padStart(2, "0")}`;
+};
+
+

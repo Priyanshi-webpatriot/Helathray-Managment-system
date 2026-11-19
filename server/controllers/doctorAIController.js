@@ -240,6 +240,30 @@ export const getDoctorChats = async (req, res) => {
 };
 
 /**
+ * CLEAR DOCTOR CHAT HISTORY FOR PATIENT
+ */
+export const clearDoctorChats = async (req, res) => {
+  try {
+    const patientId = Number(req.query.patientId || req.body?.patientId);
+    console.log(`🗑️ [Doctor AI Chats] Clearing chat history for patientId: ${patientId}`);
+
+    if (!patientId) {
+      return res.status(400).json({ error: "patientId is required to clear doctor chats" });
+    }
+
+    const deleted = await prisma.doctorChat.deleteMany({
+      where: { patientId },
+    });
+
+    console.log(`✅ [Doctor AI Chats] Deleted ${deleted.count} messages for patientId: ${patientId}`);
+    res.json({ message: "Chat history cleared successfully", count: deleted.count });
+  } catch (err) {
+    console.error("❌ [Doctor AI Chats] Clear chats error:", err.message);
+    res.status(500).json({ error: "Failed to clear chats", detail: err.message });
+  }
+};
+
+/**
  * Medical Report PDF
  */
 export const generatePDFMedicalReport = async (req, res) => {

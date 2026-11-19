@@ -908,6 +908,38 @@ export const saveConsultationDraft = async (req, res) => {
 };
 
 // ==========================================
+// STEP 3B: UPDATE DRAFT NOTE CONTENT
+// ==========================================
+export const updateConsultationDraft = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { soapNote, finalNote } = req.body;
+
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ error: "Valid note ID is required" });
+    }
+
+    const updated = await prisma.consultationNote.update({
+      where: { id },
+      data: {
+        ...(soapNote ? { soapNote: typeof soapNote === "string" ? soapNote : JSON.stringify(soapNote) } : {}),
+        ...(finalNote ? { finalNote: typeof finalNote === "string" ? finalNote : JSON.stringify(finalNote) } : {}),
+      },
+      include: {
+        patient: true,
+        doctor: true,
+      },
+    });
+
+    console.log(`✅ [Update Draft] Note #${id} updated`);
+    return res.json({ note: updated, message: "Draft updated successfully" });
+  } catch (err) {
+    console.error("❌ [Update Draft] Error:", err.message);
+    return res.status(500).json({ error: "Failed to update draft note", detail: err.message });
+  }
+};
+
+// ==========================================
 // STEP 4: DOCTOR APPROVES & SAVES FINAL NOTE
 // (Also auto-generates a patient-friendly version)
 // ==========================================
@@ -1067,26 +1099,69 @@ Rewrite this as a friendly, reassuring summary for the patient. Return plain tex
 };
 
 // ==========================================
-// GET ALL NOTES FOR A PATIENT (Doctor view)
+// GET ALL NOTES FOR A PATIENT OR DOCTOR (Doctor/Admin view)
 // ==========================================
 export const getConsultationNotes = async (req, res) => {
   try {
-    const patientId = Number(req.query.patientId);
-    console.log(`📋 [Get Notes] Fetching notes for patientId: ${patientId}`);
+    const patientId = req.query.patientId ? Number(req.query.patientId) : null;
+    const userId = req.user?.id || req.headers.userid;
+    const userRole = (req.user?.role || req.headers.role || "").toLowerCase();
 
-    if (!patientId) {
-      return res.status(400).json({ error: "patientId query parameter required" });
+    console.log(`📋 [Get Notes] patientId: ${patientId}, userId: ${userId}, role: ${userRole}`);
+
+    let whereClause = {};
+
+    if (patientId) {
+      whereClause.patientId = patientId;
+    } else if (userRole === "doctor" && userId) {
+      // Find doctor record
+      const doctor = await prisma.doctor.findUnique({
+        where: { userId: Number(userId) },
+      });
+
+      if (doctor) {
+        whereClause.OR = [
+          { doctorId: doctor.id },
+          {
+            patient: {
+              appointments: {
+                some: { doctorId: doctor.id },
+              },
+            },
+          },
+        ];
+      }
     }
 
     const notes = await prisma.consultationNote.findMany({
-      where: { patientId },
+      where: whereClause,
       include: {
-        doctor: { select: { id: true, name: true, specialty: true } },
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            age: true,
+            gender: true,
+            bloodGroup: true,
+            contact: true,
+            status: true,
+            medicalNotes: true,
+          },
+        },
+        doctor: {
+          select: {
+            id: true,
+            name: true,
+            specialty: true,
+            clinicName: true,
+            city: true,
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
 
-    console.log(`✅ [Get Notes] Found ${notes.length} notes for patientId ${patientId}`);
+    console.log(`✅ [Get Notes] Found ${notes.length} notes`);
     return res.json(notes);
   } catch (err) {
     console.error("❌ [Get Notes] Error:", err.message);

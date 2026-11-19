@@ -94,6 +94,12 @@ export default function ChatBox() {
         return;
       }
 
+      const todayStr = new Date().toISOString().split("T")[0];
+      if (date < todayStr) {
+        toast.warning("Cannot book an appointment for a past date");
+        return;
+      }
+
       if (!time) {
         toast.warning("Please select time");
         return;
