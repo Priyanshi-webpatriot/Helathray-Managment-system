@@ -66,7 +66,7 @@ const parseNotePreview = (patientNote = "", soapNote = "") => {
       .split("\n")
       .map((l) => l.trim())
       .filter(Boolean);
-    const contentLines = lines.filter((l) => !l.startsWith("From") && !l.startsWith("📋 Note from"));
+    const contentLines = lines.filter((l) => !l.startsWith("From") && !l.startsWith("Note from"));
     snippet = contentLines
       .slice(0, 2)
       .join(" ")

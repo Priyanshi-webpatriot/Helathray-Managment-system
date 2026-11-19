@@ -146,7 +146,7 @@ async function callGeminiAudioTranscription(audioBuffer, mimeType) {
   // Pass 1 uses a short probe timeout — fast-fails hanging/unresponsive models
   // Pass 2 uses the full 180s timeout for large audio on a known-working model
   const PROBE_TIMEOUT = 25000;  // 25s — fast fail
-  const FULL_TIMEOUT  = 180000; // 180s — full audio processing
+  const FULL_TIMEOUT = 180000; // 180s — full audio processing
 
   for (let pass = 0; pass < maxPasses; pass++) {
     for (let i = 0; i < UNIQUE_AUDIO_MODELS.length; i++) {
@@ -335,8 +335,8 @@ function parseDialogueResponse(rawContent) {
             speaker: (item.speaker || "").toLowerCase().includes("pat")
               ? "Patient"
               : (item.speaker || "").toLowerCase().includes("care")
-              ? "Caregiver"
-              : "Doctor",
+                ? "Caregiver"
+                : "Doctor",
             text: (item.text || "").replace(/^["']|["']$/g, "").trim(),
           }))
           .filter((t) => t.text.length > 0);
@@ -356,8 +356,8 @@ function parseDialogueResponse(rawContent) {
             speaker: (item.speaker || "").toLowerCase().includes("pat")
               ? "Patient"
               : (item.speaker || "").toLowerCase().includes("care")
-              ? "Caregiver"
-              : "Doctor",
+                ? "Caregiver"
+                : "Doctor",
             text: (item.text || "").replace(/^["']|["']$/g, "").trim(),
           }))
           .filter((t) => t.text.length > 0);
@@ -387,8 +387,8 @@ function parseDialogueResponse(rawContent) {
       const nextSpeaker = rawSp.startsWith("dr") || rawSp.startsWith("doc")
         ? "Doctor"
         : rawSp.startsWith("pt") || rawSp.startsWith("pat")
-        ? "Patient"
-        : "Caregiver";
+          ? "Patient"
+          : "Caregiver";
       const lineContent = (match[2] || "").replace(/^["']|["']$/g, "").trim();
 
       if (currentSpeaker && currentText.trim()) {
@@ -425,8 +425,8 @@ function parseDialogueResponse(rawContent) {
       const speaker = speakerRaw.startsWith("dr") || speakerRaw.startsWith("doc")
         ? "Doctor"
         : speakerRaw.startsWith("pt") || speakerRaw.startsWith("pat")
-        ? "Patient"
-        : "Caregiver";
+          ? "Patient"
+          : "Caregiver";
       const startIndex = m.index + m[0].length;
       const endIndex = i < inlineMatches.length - 1 ? inlineMatches[i + 1].index : clean.length;
       const segmentText = clean.substring(startIndex, endIndex).replace(/^["']|["']$/g, "").trim();
@@ -546,10 +546,10 @@ CRITICAL RULES:
         const verifiedDialogue = parseDialogueResponse(verifiedText);
         if (verifiedDialogue.length >= 2) {
           dialogue = verifiedDialogue;
-          console.log(`✅ [Transcribe] Clinical roles verified for ${dialogue.length} turns!`);
+          console.log(`[Transcribe] Clinical roles verified for ${dialogue.length} turns!`);
         }
       } catch (verifyErr) {
-        console.warn("⚠️ [Transcribe] Clinical role verification skipped:", verifyErr.message);
+        console.warn("[Transcribe] Clinical role verification skipped:", verifyErr.message);
       }
 
       formattedTranscript = dialogue
@@ -642,7 +642,7 @@ CRITICAL RULES:
 // STEP 1.5: FORMAT / SEPARATE SPEAKERS WITH AI
 // (For manually typed or pasted transcripts)
 // ==========================================
-export const  formatDialogue = async (req, res) => {
+export const formatDialogue = async (req, res) => {
   const reqStart = Date.now();
   console.log("\n==================== [AI NOTE WRITER: FORMAT DIALOGUE] ====================");
 
@@ -1023,7 +1023,7 @@ Rewrite this as a friendly, reassuring summary for the patient. Return plain tex
       year: "numeric",
     });
 
-    const formattedPatientNote = `📋 Note from ${doctorName} — ${date}\n\n${patientNote}`;
+    const formattedPatientNote = `Note from ${doctorName} — ${date}\n\n${patientNote}`;
 
     // Update DB
     const note = await prisma.consultationNote.update({

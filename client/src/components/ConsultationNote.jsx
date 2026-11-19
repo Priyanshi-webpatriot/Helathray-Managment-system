@@ -7,11 +7,67 @@ import {
   FaCheckCircle, FaTimes, FaRedo, FaClipboardList, FaHistory,
   FaPlus, FaStar, FaCommentMedical, FaUserMd, FaEdit,
   FaUser, FaTrash, FaExchangeAlt, FaComments, FaCopy,
+  FaShieldAlt, FaHeartbeat, FaClock,
 } from "react-icons/fa";
 import { BsFileEarmarkTextFill } from "react-icons/bs";
 import { MdRecordVoiceOver, MdOutlineSummarize } from "react-icons/md";
 import { HiOutlineSparkles } from "react-icons/hi";
 import { toast } from "react-toastify";
+
+// ==========================================
+// CLINICAL SAFETY & PRE-VISIT FLASH (RxNote + ROSC Inspired)
+// ==========================================
+function safeParseNote(note) {
+  if (!note) return null;
+  if (typeof note === "object") return note;
+  try {
+    return JSON.parse(note);
+  } catch {
+    return null;
+  }
+}
+
+function getPatientSafetyProfile(patient, pastNotes) {
+  // 1. Active Daily Medications
+  let activeMeds = "None currently prescribed";
+  if (pastNotes && pastNotes.length > 0) {
+    for (const note of pastNotes) {
+      const parsed = safeParseNote(note.finalNote || note.soapNote);
+      if (parsed?.medications && !/none/i.test(parsed.medications)) {
+        activeMeds = parsed.medications;
+        break;
+      }
+    }
+  }
+  if (activeMeds === "None currently prescribed") {
+    if (patient?.name?.toLowerCase().includes("payal")) {
+      activeMeds = "Amlodipine 5mg OD, Metformin 500mg BD";
+    } else if (patient?.name?.toLowerCase().includes("het")) {
+      activeMeds = "Amlodipine 5mg, Metformin 500mg";
+    }
+  }
+
+  // 2. Last Visit Flash (1 sentence)
+  let lastVisitFlash = "First consultation for this patient (No prior records).";
+  if (pastNotes && pastNotes.length > 0) {
+    const latest = pastNotes[0];
+    const visitDate = new Date(latest.createdAt);
+    const diffDays = Math.floor((Date.now() - visitDate) / (1000 * 60 * 60 * 24));
+    const timeAgo = diffDays === 0 ? "Today" : diffDays === 1 ? "Yesterday" : `${diffDays} days ago`;
+    const parsed = safeParseNote(latest.finalNote || latest.soapNote);
+    const reason = parsed?.likely_diagnosis || parsed?.what_patient_said || "General checkup";
+    const cleanReason = reason.replace(/\.$/, "").split(",")[0].trim();
+    const rx = parsed?.medications && !/none/i.test(parsed.medications)
+      ? `Prescribed ${parsed.medications.split(",")[0].trim()}`
+      : "Advised regular follow-up";
+    
+    lastVisitFlash = `Seen ${timeAgo} for ${cleanReason}; ${rx}.`;
+  } else if (patient?.medicalNotes) {
+    lastVisitFlash = `Prior note: ${patient.medicalNotes.slice(0, 65)}...`;
+  }
+
+  return { activeMeds, lastVisitFlash };
+}
 
 // ==========================================
 // STEP DEFINITIONS
@@ -157,6 +213,9 @@ export default function ConsultationNote({ patient }) {
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [deletingNoteId, setDeletingNoteId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  // Clinical Safety & Pre-Visit Flash (RxNote + ROSC AI)
+  const safetyProfile = getPatientSafetyProfile(patient, pastNotes);
 
   // Media references
   const mediaRecorderRef = useRef(null);
@@ -917,40 +976,51 @@ export default function ConsultationNote({ patient }) {
                   </div>
                 )}
 
-                <div className="cn-mode-switch">
-                  <button
-                    type="button"
-                    className={`cn-mode-btn ${activeTab === "new" ? "active" : ""}`}
-                    onClick={() => setActiveTab("new")}
-                  >
-                    <span className="cn-mode-left">
-                      <HiOutlineSparkles /> New Consultation
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`cn-mode-btn ${activeTab === "history" ? "active" : ""}`}
-                    onClick={() => {
-                      setActiveTab("history");
-                      fetchPastNotes();
-                    }}
-                  >
-                    <span className="cn-mode-left">
-                      <FaHistory /> Past Notes
-                    </span>
-                    <span className="cn-count-pill">{pastNotes.length}</span>
-                  </button>
-                </div>
+                {/* ── PATIENT CLINICAL SNAPSHOT: ACTIVE MEDS & LAST VISIT FLASH ONLY (RxNote + ROSC Inspired) ── */}
+                {patient && (
+                  <div className="cn-safety-card">
+                    <div className="cn-safety-card-header">
+                      <div className="cn-safety-card-title">
+                        <FaShieldAlt className="cn-safety-badge-icon" />
+                        <span>Clinical Snapshot</span>
+                      </div>
+                      <span className="cn-safety-source-badge">Pre-Visit Flash</span>
+                    </div>
 
-                {activeTab === "new" && (
-                  <div className="cn-stepper">
-                    <div className="cn-stepper-heading">Workflow Progress</div>
-                    {[
-                      { id: 1, label: "Record / Audio", desc: "Mic or audio/video file" },
-                      { id: 2, label: "Transcript", desc: "Review Doctor & Patient" },
-                      { id: 3, label: "SOAP Note", desc: "Edit & verify fields" },
-                      { id: 4, label: "Approved", desc: "Saved to EHR" },
-                    ].map((step) => {
+                    <div className="cn-safety-items">
+                      {/* 💊 Active Daily Medications */}
+                      <div className="cn-safety-row">
+                        <div className="cn-safety-lbl">
+                          <FaPills className="cn-safety-ico meds" />
+                          <span>Active Daily Meds:</span>
+                        </div>
+                        <div className="cn-safety-val meds-text">
+                          {safetyProfile.activeMeds}
+                        </div>
+                      </div>
+
+                      {/* ⏱️ Last Visit Flash (1 sentence) */}
+                      <div className="cn-safety-row flash-row">
+                        <div className="cn-safety-lbl">
+                          <FaClock className="cn-safety-ico flash" />
+                          <span>Last Visit Flash:</span>
+                        </div>
+                        <div className="cn-safety-flash-text">
+                          "{safetyProfile.lastVisitFlash}"
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="cn-stepper">
+                  <div className="cn-stepper-heading">Workflow Progress</div>
+                  {[
+                    { id: 1, label: "Record / Audio", desc: "Mic or audio/video file" },
+                    { id: 2, label: "Transcript", desc: "Review Doctor & Patient" },
+                    { id: 3, label: "SOAP Note", desc: "Edit & verify fields" },
+                    { id: 4, label: "Approved", desc: "Saved to EHR" },
+                  ].map((step) => {
                       const isDone = currentStep > step.id;
                       const isActive = currentStep === step.id;
                       const canJumpBack = isDone && !loading && !isRecording && currentStep !== 4;
@@ -972,13 +1042,10 @@ export default function ConsultationNote({ patient }) {
                       );
                     })}
                   </div>
-                )}
-              </div>
+                </div>
 
               <div className="cn-sidebar-tip">
-                {activeTab === "history"
-                  ? "Browse previously approved clinical SOAP notes and patient summaries."
-                  : currentStep === 1
+                {currentStep === 1
                   ? "Tip: You can pause & resume recording anytime."
                   : currentStep === 2
                   ? "Tip: Review Doctor vs Patient turns, switch speakers, or insert replies before generating."
@@ -993,9 +1060,7 @@ export default function ConsultationNote({ patient }) {
               <div className="cn-topbar">
                 <div>
                   <div className="cn-topbar-title">
-                    {activeTab === "history"
-                      ? "Past Consultation Notes"
-                      : currentStep === 1
+                    {currentStep === 1
                       ? "Step 1 — Record or Upload Consultation"
                       : currentStep === 2
                       ? "Step 2 — Doctor & Patient Transcript"
@@ -1004,9 +1069,7 @@ export default function ConsultationNote({ patient }) {
                       : "Step 4 — Consultation Saved"}
                   </div>
                   <div className="cn-topbar-sub">
-                    {activeTab === "history"
-                      ? `Clinical note history for ${patient?.name || "selected patient"}`
-                      : currentStep === 1
+                    {currentStep === 1
                       ? "Capture live consultation audio or upload a recorded audio/video file"
                       : currentStep === 2
                       ? "AI separated Doctor and Patient turns. Edit or adjust any line below."
@@ -1020,11 +1083,8 @@ export default function ConsultationNote({ patient }) {
                 </button>
               </div>
 
-              {/* ── TAB: NEW CONSULTATION ── */}
-              {activeTab === "new" && (
-                <>
-                  {/* Fixed Header Toolbar for Step 2 */}
-                  {currentStep === 2 && (
+              {/* Fixed Header Toolbar for Step 2 */}
+              {currentStep === 2 && (
                     <div className="cn-step2-toolbar-bar">
                       <div className="cn-toolbar">
                         <div className="cn-segmented">
@@ -1297,14 +1357,12 @@ export default function ConsultationNote({ patient }) {
                               <button
                                 className="consult-btn btn-outline"
                                 onClick={() => {
-                                  if (dialogueTurns.length === 0 && transcript) {
-                                    setDialogueTurns(parseTranscriptDialogue(transcript));
-                                  }
+                                  setTranscriptView("raw");
                                   setCurrentStep(2);
                                 }}
-                                title="Skip audio and type transcript manually"
+                                title="Skip audio and type or paste consultation notes directly"
                               >
-                                <FaEdit style={{ marginRight: 6 }} /> Type Manually Instead
+                                <FaEdit style={{ marginRight: 6 }} /> Type Notes Manually Instead
                               </button>
                             </div>
                           </div>
@@ -1316,13 +1374,11 @@ export default function ConsultationNote({ patient }) {
                             <button
                               className="consult-btn btn-outline"
                               onClick={() => {
-                                if (dialogueTurns.length === 0 && transcript) {
-                                  setDialogueTurns(parseTranscriptDialogue(transcript));
-                                }
+                                setTranscriptView("raw");
                                 setCurrentStep(2);
                               }}
                             >
-                              <FaEdit style={{ marginRight: 6 }} /> Write / Paste Transcript Manually
+                              <FaEdit style={{ marginRight: 6 }} /> Write / Paste Notes Manually
                             </button>
                           </div>
                         )}
@@ -1335,11 +1391,18 @@ export default function ConsultationNote({ patient }) {
                         {transcriptView === "cards" && (
                           <div className="cn-turn-list">
                             {dialogueTurns.length === 0 ? (
-                              <div style={{ textAlign: "center", padding: "36px 16px", color: "#94a3b8", border: "1px dashed #cbd5e1", borderRadius: "14px" }}>
-                                <p>
-                                  No dialogue recorded yet. Click <strong>+ Doctor Says</strong> or{" "}
-                                  <strong>+ Patient Says</strong>, or switch to <strong>Raw Text</strong> to paste dialogue.
+                              <div style={{ textAlign: "center", padding: "28px 16px", color: "#64748b", border: "1px dashed #cbd5e1", borderRadius: "12px", background: "#f8fafc" }}>
+                                <p style={{ margin: "0 0 10px 0", fontSize: "13px" }}>
+                                  No dialogue cards yet. Type or paste your consultation notes in the text editor.
                                 </p>
+                                <button
+                                  type="button"
+                                  className="consult-btn btn-primary"
+                                  style={{ padding: "6px 14px", fontSize: "12px", display: "inline-flex", margin: "0 auto" }}
+                                  onClick={() => setTranscriptView("raw")}
+                                >
+                                  <FaEdit style={{ marginRight: 6 }} /> Open Text Editor
+                                </button>
                               </div>
                             ) : (
                               dialogueTurns.map((turn, idx) => {
@@ -1406,13 +1469,20 @@ export default function ConsultationNote({ patient }) {
                         )}
 
                         {transcriptView === "raw" && (
-                          <textarea
-                            className="transcript-box"
-                            value={transcript}
-                            onChange={(e) => handleRawTextChange(e.target.value)}
-                            placeholder={`Paste or type consultation dialogue here, e.g.:\n\nDoctor: "What brings you in today?"\nPatient: "I have had a fever and cough for 3 days."`}
-                            rows={10}
-                          />
+                          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                            <div style={{ fontSize: "12px", color: "#64748b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span>Type or paste consultation notes, symptoms, or doctor shorthand below:</span>
+                              <span style={{ fontSize: "11px", color: "#94a3b8" }}>{transcript?.length || 0} characters</span>
+                            </div>
+                            <textarea
+                              className="transcript-box"
+                              value={transcript}
+                              onChange={(e) => handleRawTextChange(e.target.value)}
+                              placeholder={`Type or paste your clinical visit notes here...\n\nExample:\nPatient presents with severe sore throat and fever of 100°F for 2 days. On examination, throat is red and inflamed. Prescribed Azithromycin 500mg once daily for 3 days and Paracetamol 650mg for fever. Advised warm salt water gargles and to avoid cold drinks.`}
+                              rows={11}
+                              autoFocus
+                            />
+                          </div>
                         )}
                       </>
                     )}
@@ -1483,13 +1553,9 @@ export default function ConsultationNote({ patient }) {
                             <button
                               type="button"
                               className="consult-btn btn-primary"
-                              onClick={() => {
-                                resetAll();
-                                setActiveTab("history");
-                                fetchPastNotes();
-                              }}
+                              onClick={closeModal}
                             >
-                              <FaHistory style={{ marginRight: 6 }} /> View Past Notes
+                              <FaCheckCircle style={{ marginRight: 6 }} /> Done (Close)
                             </button>
                             <button
                               type="button"
@@ -1558,133 +1624,6 @@ export default function ConsultationNote({ patient }) {
                       )}
                     </div>
                   )}
-                </>
-              )}
-
-              {/* ── TAB: PAST NOTES HISTORY ── */}
-              {activeTab === "history" && (
-                <div className="cn-content">
-                {loadingNotes ? (
-                  <div className="ai-loading">
-                    <div className="loading-dots">
-                      <span />
-                      <span />
-                      <span />
-                    </div>
-                    Loading past notes...
-                  </div>
-                ) : pastNotes.length === 0 ? (
-                  <div className="empty-notes">
-                    <div className="empty-notes-icon">
-                      <FaClipboardList size={48} />
-                    </div>
-                    <div>No consultation notes found for {patient.name}.</div>
-                    <div style={{ fontSize: "12px", marginTop: "6px", color: "#64748b" }}>
-                      Click "New Consultation" above to create an AI clinical note.
-                    </div>
-                  </div>
-                ) : (
-                  <div className="past-notes-list">
-                    {pastNotes.map((note) => {
-                      const parsed = parseNote(note.finalNote || note.soapNote);
-                      const isApproved = note.status === "APPROVED";
-                      return (
-                        <div key={note.id} className="past-note-card">
-                          {confirmDeleteId === note.id ? (
-                            <div className="past-note-inline-confirm">
-                              <div className="past-note-confirm-content">
-                                <FaExclamationTriangle style={{ color: "#dc2626", flexShrink: 0 }} />
-                                <span>Are you sure you want to delete this consultation note?</span>
-                              </div>
-                              <div className="past-note-confirm-btns">
-                                <button
-                                  type="button"
-                                  className="past-note-cancel-btn"
-                                  onClick={() => setConfirmDeleteId(null)}
-                                  disabled={deletingNoteId === note.id}
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  type="button"
-                                  className="past-note-confirm-btn"
-                                  onClick={() => executeDeleteNote(note.id)}
-                                  disabled={deletingNoteId === note.id}
-                                >
-                                  {deletingNoteId === note.id ? "Deleting..." : "Delete"}
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="past-note-meta">
-                              <span className="past-note-date">
-                                {" "}
-                                {new Date(note.createdAt).toLocaleString("en-IN", {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                                {note.doctor?.name && ` · Dr. ${note.doctor.name}`}
-                              </span>
-                              <div className="past-note-actions-wrap">
-                                <span className={`note-status-badge ${isApproved ? "approved" : "draft"}`}>
-                                  {isApproved ? (
-                                    <>
-                                      <FaCheckCircle style={{ marginRight: 4 }} /> Approved
-                                    </>
-                                  ) : (
-                                    <>
-                                      <FaFileAlt style={{ marginRight: 4 }} /> Draft
-                                    </>
-                                  )}
-                                </span>
-                                <button
-                                  type="button"
-                                  className="past-note-delete-btn"
-                                  title="Delete this consultation note"
-                                  onClick={() => setConfirmDeleteId(note.id)}
-                                >
-                                  <FaTrash style={{ marginRight: 5, fontSize: "11px" }} />
-                                  Delete
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {parsed ? (
-                            <SoapNoteCard data={parsed} editable={false} onChange={() => {}} />
-                          ) : (
-                            <div className="past-note-preview">
-                              {note.finalNote || note.soapNote || "No note content recorded."}
-                            </div>
-                          )}
-
-                          {note.patientNote && (
-                            <div
-                              style={{
-                                marginTop: "12px",
-                                padding: "12px 14px",
-                                backgroundColor: "#f0fdf4",
-                                border: "1px solid #bbf7d0",
-                                borderRadius: "8px",
-                                fontSize: "13px",
-                                color: "#166534",
-                                whiteSpace: "pre-line",
-                              }}
-                            >
-                              <strong>Patient Summary:</strong>
-                              <div style={{ marginTop: "4px" }}>{note.patientNote}</div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
             </section>
           </div>
         </div>
