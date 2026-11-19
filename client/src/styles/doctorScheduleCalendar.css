@@ -1,0 +1,472 @@
+/* ── CARESCRIBE DOCTOR OPD CLINICAL CALENDAR STYLES ── */
+
+.doctor-calendar-container {
+  background: #ffffff;
+  border-radius: 24px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 20px -4px rgba(15, 23, 42, 0.06);
+  padding: 24px;
+  margin-bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Top Stats Bar ── */
+.doc-cal-stats-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.doc-cal-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #f8fafc;
+  padding: 14px 18px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+
+.doc-cal-stat-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.doc-cal-stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.stat-icon-blue {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.stat-icon-teal {
+  background: #ccfbf1;
+  color: #0d9488;
+}
+
+.stat-icon-amber {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.doc-cal-stat-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.doc-cal-stat-val {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+/* ── Main Layout: Calendar Grid + Agenda Split ── */
+.doc-cal-main-layout {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 24px;
+}
+
+@media (max-width: 960px) {
+  .doc-cal-main-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Left Column: Monthly Calendar ── */
+.doc-cal-left-panel {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.doc-cal-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.doc-cal-month-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  font-weight: 850;
+  color: #0f172a;
+}
+
+.doc-cal-nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.doc-cal-today-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  padding: 6px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.doc-cal-today-btn:hover {
+  background: #0284c7;
+  border-color: #0284c7;
+  color: #ffffff;
+}
+
+.doc-cal-arrow-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.doc-cal-arrow-btn:hover {
+  background: #0284c7;
+  border-color: #0284c7;
+  color: #ffffff;
+}
+
+/* Weekday header row */
+.doc-cal-weekdays-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.doc-cal-weekday-label {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  padding: 4px 0;
+}
+
+/* Day Cells Grid */
+.doc-cal-days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.doc-cal-day-cell {
+  min-height: 70px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  position: relative;
+}
+
+.doc-cal-day-cell:hover {
+  border-color: #38bdf8;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.1);
+}
+
+.doc-cal-day-cell.out-of-month {
+  opacity: 0.38;
+  background: #f1f5f9;
+}
+
+.doc-cal-day-cell.is-today {
+  border: 2px solid #0284c7;
+  background: #f0f9ff;
+}
+
+.doc-cal-day-cell.is-selected {
+  background: #0284c7 !important;
+  border-color: #0284c7 !important;
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(2, 132, 199, 0.28);
+}
+
+.doc-cal-day-cell.is-selected .doc-cal-day-num {
+  color: #ffffff;
+}
+
+.doc-cal-day-cell.is-selected .doc-cal-appt-chip {
+  background: #ffffff;
+  color: #0284c7;
+}
+
+.doc-cal-day-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.doc-cal-day-num {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.doc-cal-today-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #0284c7;
+}
+
+.doc-cal-day-cell.is-selected .doc-cal-today-dot {
+  background: #ffffff;
+}
+
+.doc-cal-badge-wrap {
+  display: flex;
+  margin-top: 4px;
+}
+
+.doc-cal-appt-chip {
+  font-size: 10px;
+  font-weight: 750;
+  background: #e0f2fe;
+  color: #0284c7;
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+/* ── Right Column: Selected Day Patient Agenda ── */
+.doc-cal-right-panel {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.doc-agenda-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 16px;
+}
+
+.doc-agenda-caption {
+  font-size: 11px;
+  font-weight: 800;
+  color: #0284c7;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+}
+
+.doc-agenda-date {
+  font-size: 17px;
+  font-weight: 850;
+  color: #0f172a;
+  margin-top: 2px;
+}
+
+.doc-agenda-count-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.doc-agenda-count-badge.active {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.doc-agenda-count-badge.empty {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.doc-agenda-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  max-height: 480px;
+  padding-right: 4px;
+}
+
+/* Single Agenda Card */
+.doc-agenda-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.doc-agenda-card:hover {
+  border-color: #38bdf8;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+}
+
+.doc-agenda-card-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0369a1;
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 750;
+  align-self: flex-start;
+}
+
+.doc-agenda-card-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.doc-agenda-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.doc-agenda-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-agenda-patient-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.doc-agenda-patient-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.doc-agenda-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 750;
+  background: #dcfce7;
+  color: #15803d;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.doc-agenda-meta {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.doc-agenda-phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Empty State */
+.doc-agenda-empty {
+  padding: 40px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.doc-agenda-empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: #f1f5f9;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: 12px;
+}
+
+.doc-agenda-empty h4 {
+  font-size: 15px;
+  font-weight: 800;
+  color: #1e293b;
+  margin: 0 0 6px;
+}
+
+.doc-agenda-empty p {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 260px;
+}
+

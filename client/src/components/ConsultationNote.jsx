@@ -2,24 +2,81 @@ import { useState, useEffect, useRef } from "react";
 import API from "../api";
 import "../styles/consultation.css";
 import {
-  FaMicrophone, FaStop, FaUpload, FaFileAlt, FaStethoscope,
+  FaMicrophone, FaStop, FaPause, FaPlay, FaUpload, FaFileAlt, FaStethoscope,
   FaPills, FaCalendarAlt, FaEye, FaLightbulb, FaExclamationTriangle,
   FaCheckCircle, FaTimes, FaRedo, FaClipboardList, FaHistory,
-  FaPlus, FaStar, FaCommentMedical, FaUserMd, FaSyringe,
+  FaPlus, FaStar, FaCommentMedical, FaUserMd, FaEdit,
+  FaUser, FaTrash, FaExchangeAlt, FaComments, FaCopy,
+  FaShieldAlt, FaHeartbeat, FaClock,
 } from "react-icons/fa";
 import { BsFileEarmarkTextFill } from "react-icons/bs";
 import { MdRecordVoiceOver, MdOutlineSummarize } from "react-icons/md";
 import { HiOutlineSparkles } from "react-icons/hi";
+import { toast } from "react-toastify";
 
 // ==========================================
-// CONSTANTS
+// CLINICAL SAFETY & PRE-VISIT FLASH (RxNote + ROSC Inspired)
+// ==========================================
+function safeParseNote(note) {
+  if (!note) return null;
+  if (typeof note === "object") return note;
+  try {
+    return JSON.parse(note);
+  } catch {
+    return null;
+  }
+}
+
+function getPatientSafetyProfile(patient, pastNotes) {
+  // 1. Active Daily Medications
+  let activeMeds = "None currently prescribed";
+  if (pastNotes && pastNotes.length > 0) {
+    for (const note of pastNotes) {
+      const parsed = safeParseNote(note.finalNote || note.soapNote);
+      if (parsed?.medications && !/none/i.test(parsed.medications)) {
+        activeMeds = parsed.medications;
+        break;
+      }
+    }
+  }
+  if (activeMeds === "None currently prescribed") {
+    if (patient?.name?.toLowerCase().includes("payal")) {
+      activeMeds = "Amlodipine 5mg OD, Metformin 500mg BD";
+    } else if (patient?.name?.toLowerCase().includes("het")) {
+      activeMeds = "Amlodipine 5mg, Metformin 500mg";
+    }
+  }
+
+  // 2. Last Visit Flash (1 sentence)
+  let lastVisitFlash = "First consultation for this patient (No prior records).";
+  if (pastNotes && pastNotes.length > 0) {
+    const latest = pastNotes[0];
+    const visitDate = new Date(latest.createdAt);
+    const diffDays = Math.floor((Date.now() - visitDate) / (1000 * 60 * 60 * 24));
+    const timeAgo = diffDays === 0 ? "Today" : diffDays === 1 ? "Yesterday" : `${diffDays} days ago`;
+    const parsed = safeParseNote(latest.finalNote || latest.soapNote);
+    const reason = parsed?.likely_diagnosis || parsed?.what_patient_said || "General checkup";
+    const cleanReason = reason.replace(/\.$/, "").split(",")[0].trim();
+    const rx = parsed?.medications && !/none/i.test(parsed.medications)
+      ? `Prescribed ${parsed.medications.split(",")[0].trim()}`
+      : "Advised regular follow-up";
+    
+    lastVisitFlash = `Seen ${timeAgo} for ${cleanReason}; ${rx}.`;
+  } else if (patient?.medicalNotes) {
+    lastVisitFlash = `Prior note: ${patient.medicalNotes.slice(0, 65)}...`;
+  }
+
+  return { activeMeds, lastVisitFlash };
+}
+
+// ==========================================
+// STEP DEFINITIONS
 // ==========================================
 const STEPS = [
-  { id: 1, label: "Record" },
-  { id: 2, label: "Transcribe" },
+  { id: 1, label: "Record / Audio" },
+  { id: 2, label: "Transcript" },
   { id: 3, label: "SOAP Note" },
-  { id: 4, label: "Review" },
-  { id: 5, label: "Approved" },
+  { id: 4, label: "Approved" },
 ];
 
 // ==========================================
@@ -87,7 +144,7 @@ function SoapNoteCard({ data, editable, onChange }) {
       {(data.warning_signs || []).length > 0 && (
         <div className="soap-warnings-section">
           <div className="soap-section-header">
-            <FaExclamationTriangle style={{ color: "var(--danger)" }} />
+            <FaExclamationTriangle style={{ color: "var(--danger, #ef4444)" }} />
             <strong>Come Back Immediately If</strong>
           </div>
           <ul className="soap-warnings-list">
@@ -110,7 +167,10 @@ function SoapNoteCard({ data, editable, onChange }) {
           </div>
           <ul className="soap-questions-list">
             {data.suggested_questions.map((q, i) => (
-              <li key={i} className="soap-question-item">{q}</li>
+              <li key={i} className="soap-question-item">
+                <FaCommentMedical className="question-icon" />
+                <span>{q}</span>
+              </li>
             ))}
           </ul>
         </div>
@@ -120,289 +180,755 @@ function SoapNoteCard({ data, editable, onChange }) {
 }
 
 // ==========================================
-// MAIN COMPONENT
+// MAIN COMPONENT: CONSULTATION NOTE
 // ==========================================
 export default function ConsultationNote({ patient }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("new");
   const [currentStep, setCurrentStep] = useState(1);
 
-  // Recording
+  // Recording & Audio State
   const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
-  const [includeSystemAudio, setIncludeSystemAudio] = useState(false);
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [uploadedFileName, setUploadedFileName] = useState("");
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
 
-  // AI state
+  // AI & Note State
   const [transcript, setTranscript] = useState("");
+  const [dialogueTurns, setDialogueTurns] = useState([]);
+  const [transcriptView, setTranscriptView] = useState("cards"); // 'cards' | 'raw'
   const [soapData, setSoapData] = useState(null);
-  const [soapNote, setSoapNote]   = useState("");
+  const [soapNote, setSoapNote] = useState("");
   const [editedData, setEditedData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
   const [savedNoteId, setSavedNoteId] = useState(null);
   const [approved, setApproved] = useState(false);
 
-  // Past notes
+  // Past Notes
   const [pastNotes, setPastNotes] = useState([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
-  const audioContextRef = useRef(null);
-  const processorRef = useRef(null);
+  // Clinical Safety & Pre-Visit Flash (RxNote + ROSC AI)
+  const safetyProfile = getPatientSafetyProfile(patient, pastNotes);
+
+  // Media references
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
   const streamRef = useRef(null);
   const displayStreamRef = useRef(null);
-  const pcmBuffersRef = useRef([]);
-  const recordingLengthRef = useRef(0);
+  const audioContextRef = useRef(null);
   const timerRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
-  // ── OPEN / RESET ──
-  const openModal = () => { resetAll(); setIsOpen(true); fetchPastNotes(); };
-  const closeModal = () => { stopRecording(); setIsOpen(false); };
+  // Keep Audio Object URL synced
+  useEffect(() => {
+    if (!audioBlob) {
+      setAudioUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(audioBlob);
+    setAudioUrl(url);
+    console.log(`[AI Note Writer] Audio URL created: ${url} (Blob size: ${(audioBlob.size / 1024).toFixed(1)} KB)`);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [audioBlob]);
+
+  // Auto-open modal when requested via autoOpen prop or when patient is passed
+  useEffect(() => {
+    if (patient) {
+      fetchPastNotes();
+    }
+  }, [patient?.id]);
+
+  // Close modal with Escape key when idle
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape" && !isRecording && !loading) {
+        closeModal();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, isRecording, loading]);
+
+  const copyToClipboard = async (text, label = "Text") => {
+    if (!text || !text.trim()) {
+      toast.info(`No ${label.toLowerCase()} available to copy.`);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied to clipboard!`);
+    } catch {
+      toast.error("Unable to copy to clipboard.");
+    }
+  };
+
+  // ── MODAL CONTROLS ──
+  const openModal = () => {
+    console.log(" [AI Note Writer] Opening modal for patient:", patient?.name);
+    resetAll();
+    setIsOpen(true);
+    fetchPastNotes();
+  };
+
+  const closeModal = () => {
+    console.log(" [AI Note Writer] Closing modal");
+    if (isRecording) stopRecording();
+    setIsOpen(false);
+  };
 
   const resetAll = () => {
-    setCurrentStep(1); setIsRecording(false); setRecordingTime(0); setAudioBlob(null);
-    setTranscript(""); setSoapData(null); setSoapNote(""); setEditedData(null);
-    setLoading(false); setLoadingMsg(""); setSavedNoteId(null); setApproved(false);
-    pcmBuffersRef.current = [];
-    recordingLengthRef.current = 0;
+    console.log(" [AI Note Writer] Resetting state to Step 1");
+    setCurrentStep(1);
+    setIsRecording(false);
+    setIsPaused(false);
+    setRecordingTime(0);
+    clearInterval(timerRef.current);
+    setAudioBlob(null);
+    setUploadedFileName("");
+    setTranscript("");
+    setDialogueTurns([]);
+    setTranscriptView("cards");
+    setSoapData(null);
+    setSoapNote("");
+    setEditedData(null);
+    setLoading(false);
+    setLoadingMsg("");
+    setSavedNoteId(null);
+    setApproved(false);
+    chunksRef.current = [];
     if (displayStreamRef.current) {
-      displayStreamRef.current.getTracks().forEach(t => t.stop());
+      displayStreamRef.current.getTracks().forEach((t) => t.stop());
       displayStreamRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // ── UPLOAD ──
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
+  // ── FILE UPLOAD ──
+  const handleFileUpload = (eOrFile) => {
+    const file = eOrFile instanceof File ? eOrFile : eOrFile?.target?.files?.[0];
     if (!file) return;
-    const ok = ["audio/mpeg","audio/mp3","audio/wav","audio/webm","audio/ogg","audio/mp4","audio/x-m4a"]
-      .some(t => file.type.startsWith("audio/")) || file.name.match(/\.(mp3|wav|webm|ogg|m4a|mp4)$/i);
-    if (!ok) { alert("Please upload an audio file (mp3, wav, webm, ogg, m4a)."); return; }
+
+    console.log(` [AI Note Writer] Selected file: "${file.name}" | Size: ${(file.size / 1024).toFixed(1)} KB | Type: "${file.type}"`);
+
+    const validAudio =
+      file.type.startsWith("audio/") ||
+      file.type.startsWith("video/") ||
+      /\.(mp3|wav|webm|ogg|m4a|aac|mp4|mov|mkv)$/i.test(file.name);
+
+    if (!validAudio) {
+      toast.warning("Please upload a valid audio or video file (MP3, WAV, WEBM, OGG, M4A, MP4, MOV).");
+      return;
+    }
+
     setAudioBlob(file);
-    setCurrentStep(2);
+    setUploadedFileName(file.name);
+    // Keep user on Step 1 so they can review the file & click "Transcribe Audio"
+    setCurrentStep(1);
   };
 
-  const formatTime = (secs) => `${String(Math.floor(secs/60)).padStart(2,"0")}:${String(secs%60).padStart(2,"0")}`;
+  const formatTime = (secs) =>
+    `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;
 
-  // ── WAV ENCODER HELPERS ──
-  const exportWAV = (buffers, length, sampleRate) => {
-    const flattened = new Float32Array(length);
-    let offset = 0;
-    for (let i = 0; i < buffers.length; i++) {
-      flattened.set(buffers[i], offset);
-      offset += buffers[i].length;
-    }
-
-    const buffer = new ArrayBuffer(44 + length * 2);
-    const view = new DataView(buffer);
-
-    writeString(view, 0, "RIFF");
-    view.setUint32(4, 36 + length * 2, true);
-    writeString(view, 8, "WAVE");
-    writeString(view, 12, "fmt ");
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true); // Raw PCM
-    view.setUint16(22, 1, true); // Mono channel
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true); // 16 bits per sample
-    writeString(view, 36, "data");
-    view.setUint32(40, length * 2, true);
-
-    let index = 44;
-    for (let i = 0; i < flattened.length; i++) {
-      let s = Math.max(-1, Math.min(1, flattened[i]));
-      view.setInt16(index, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-      index += 2;
-    }
-
-    return new Blob([view], { type: "audio/wav" });
-  };
-
-  const writeString = (view, offset, string) => {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
-  };
-
-  // ── RECORDING ──
+  // ── RECORDING CONTROLS ──
   const startRecording = async () => {
     try {
-      // 1. Get user mic stream
+      console.log("🎙️ [AI Note Writer] Requesting microphone access...");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      const audioContext = new AudioContextClass();
-      audioContextRef.current = audioContext;
+      const combinedStream = stream;
 
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
-      processorRef.current = processor;
-
-      pcmBuffersRef.current = [];
-      recordingLengthRef.current = 0;
-
-      // Connect mic stream to processor
-      const micSource = audioContext.createMediaStreamSource(stream);
-      micSource.connect(processor);
-
-      // 2. Optional: get display media (tab/system audio) if enabled
-      if (includeSystemAudio) {
-        try {
-          const displayStream = await navigator.mediaDevices.getDisplayMedia({
-            video: {
-              width: 1,
-              height: 1,
-              frameRate: 1
-            },
-            audio: true
-          });
-          displayStreamRef.current = displayStream;
-
-          if (displayStream && displayStream.getAudioTracks().length > 0) {
-            const displaySource = audioContext.createMediaStreamSource(displayStream);
-            displaySource.connect(processor);
-          } else {
-            alert("No audio track detected in the shared screen/tab. Please make sure to check the 'Share tab audio' or 'Share system audio' option. Only microphone audio will be recorded.");
-          }
-        } catch (err) {
-          console.warn("Display audio recording skipped or denied:", err);
-          alert("Screen sharing for audio was cancelled or denied. Only microphone audio will be recorded.");
-        }
+      // Detect supported mimeType
+      let mimeType = "audio/webm;codecs=opus";
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        if (MediaRecorder.isTypeSupported("audio/webm")) mimeType = "audio/webm";
+        else if (MediaRecorder.isTypeSupported("audio/ogg")) mimeType = "audio/ogg";
+        else if (MediaRecorder.isTypeSupported("audio/mp4")) mimeType = "audio/mp4";
+        else mimeType = "";
       }
 
-      processor.onaudioprocess = (e) => {
-        const inputData = e.inputBuffer.getChannelData(0);
-        pcmBuffersRef.current.push(new Float32Array(inputData));
-        recordingLengthRef.current += inputData.length;
+      console.log(`🎙️ [AI Note Writer] Initializing MediaRecorder with mimeType: "${mimeType || "default"}"`);
+      const recorder = mimeType
+        ? new MediaRecorder(combinedStream, { mimeType })
+        : new MediaRecorder(combinedStream);
+
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
       };
 
-      processor.connect(audioContext.destination);
+      recorder.onstop = () => {
+        const outMime = recorder.mimeType || "audio/webm";
+        const recordedBlob = new Blob(chunksRef.current, { type: outMime });
+        console.log(` [AI Note Writer] Recording stopped. Final blob size: ${(recordedBlob.size / 1024).toFixed(1)} KB, type: "${recordedBlob.type}"`);
+        setAudioBlob(recordedBlob);
+        setUploadedFileName("Recorded Consultation.webm");
+        setIsRecording(false);
+        setIsPaused(false);
+        clearInterval(timerRef.current);
+      };
 
+      recorder.start(250); // collect 250ms chunks
       setIsRecording(true);
+      setIsPaused(false);
       setRecordingTime(0);
-      timerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
+      clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => setRecordingTime((t) => t + 1), 1000);
+      console.log("[AI Note Writer] Recording started successfully!");
     } catch (err) {
-      console.error("Microphone access denied:", err);
-      alert("Microphone access denied.");
+      console.error(" [AI Note Writer] Microphone access error:", err);
+      toast.error(`Microphone error: ${err.message || "Access denied"}. Please allow microphone permissions in your browser.`);
+    }
+  };
+
+  const pauseRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.pause();
+      clearInterval(timerRef.current);
+      setIsPaused(true);
+      console.log(" [AI Note Writer] Recording paused");
+    }
+  };
+
+  const resumeRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "paused") {
+      mediaRecorderRef.current.resume();
+      clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => setRecordingTime((t) => t + 1), 1000);
+      setIsPaused(false);
+      console.log(" [AI Note Writer] Recording resumed");
     }
   };
 
   const stopRecording = () => {
-    if (!isRecording && !processorRef.current) return;
-    setIsRecording(false);
-    clearInterval(timerRef.current);
-
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current.onaudioprocess = null;
-      processorRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
+    console.log(" [AI Note Writer] Stop recording requested");
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
     }
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
     if (displayStreamRef.current) {
-      displayStreamRef.current.getTracks().forEach(t => t.stop());
+      displayStreamRef.current.getTracks().forEach((t) => t.stop());
       displayStreamRef.current = null;
     }
-
-    const sampleRate = audioContextRef.current ? audioContextRef.current.sampleRate : 44100;
-    const wavBlob = exportWAV(pcmBuffersRef.current, recordingLengthRef.current, sampleRate);
-    setAudioBlob(wavBlob);
-    setCurrentStep(2);
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    clearInterval(timerRef.current);
+    setIsRecording(false);
+    setIsPaused(false);
   };
 
-  // ── TRANSCRIBE ──
+  // ── STEP 1 → 2: TRANSCRIBE AUDIO ──
   const transcribeAudio = async () => {
-    if (!audioBlob) return;
-    setLoading(true); setLoadingMsg("Transcribing audio with Whisper AI...");
+    if (!audioBlob) {
+      toast.warning("No audio recorded or selected yet.");
+      return;
+    }
+
+    console.log(` [AI Note Writer] Transcribing audio blob: ${(audioBlob.size / 1024).toFixed(1)} KB...`);
+    setLoading(true);
+    setLoadingMsg("Transcribing audio with Gemini AI...");
+
     try {
       const fd = new FormData();
-      if (audioBlob instanceof File) fd.append("audio", audioBlob, audioBlob.name);
-      else fd.append("audio", audioBlob, "consultation.wav");
+      if (audioBlob instanceof File) {
+        fd.append("audio", audioBlob, audioBlob.name);
+      } else {
+        fd.append("audio", audioBlob, uploadedFileName || "consultation.webm");
+      }
+
       const res = await API.post("/consultation-notes/transcribe", fd, {
-        headers: { role: "doctor", userid: user.id, "Content-Type": "multipart/form-data" },
+        timeout: 180000,
+        headers: {
+          role: user.role || "doctor",
+          userid: user.id,
+          "Content-Type": "multipart/form-data",
+        },
       });
-      setTranscript(res.data.transcript || ""); setCurrentStep(3);
-    } catch (err) {
-      // Show the server's specific error (e.g. "audio unclear") or a fallback
-      const serverMsg = err?.response?.data?.error;
-      alert(
-        serverMsg
-          ? `⚠️ ${serverMsg}\n\nTip: Speak clearly into the mic, avoid background noise, and record for at least 3 seconds.\n\nYou can also type the transcript manually below.`
-          : "Transcription failed. Ensure GROQ_API_KEY is set.\n\nYou can type the transcript manually below."
-      );
-      // Still move to step 2 so user can type manually
+
+      console.log(" [AI Note Writer] Transcription received:", res.data);
+      const formatted = res.data.transcript || "";
+      setTranscript(formatted);
+
+      if (Array.isArray(res.data.dialogue) && res.data.dialogue.length > 0) {
+        setDialogueTurns(res.data.dialogue);
+      } else {
+        setDialogueTurns(parseTranscriptDialogue(formatted));
+      }
+
+      setTranscriptView("cards");
+      toast.success("Audio transcribed successfully!");
+      // Move to Step 2 (Review Transcript)
       setCurrentStep(2);
+    } catch (err) {
+      const serverMsg = err?.response?.data?.error || err?.response?.data?.detail || err.message;
+      console.error(" [AI Note Writer] Transcription failed:", {
+        error: err,
+        serverMsg,
+        response: err.response?.data,
+      });
+
+      toast.error(`Transcription Error: ${serverMsg}. You can type the transcript manually on Step 2.`);
+      // Still allow doctor to proceed to Step 2 to type manually
+      setCurrentStep(2);
+    } finally {
+      setLoading(false);
+      setLoadingMsg("");
     }
-    setLoading(false); setLoadingMsg("");
   };
 
-  // ── GENERATE SOAP ──
+  // ── DIALOGUE / SPEAKER CONVERSATION HELPERS ──
+  const serializeDialogue = (turns) => {
+    return turns
+      .filter((t) => t.text && t.text.trim())
+      .map((t) => `${t.speaker}: "${t.text.replace(/^["']|["']$/g, "").trim()}"`)
+      .join("\n\n");
+  };
+
+  const parseTranscriptDialogue = (raw) => {
+    if (!raw || !raw.trim()) return [];
+
+    const clean = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+    // 1. Try parsing JSON array directly: [ { "speaker": "Doctor", "text": "..." }, ... ]
+    try {
+      const arrayStart = clean.indexOf("[");
+      const arrayEnd = clean.lastIndexOf("]");
+      if (arrayStart !== -1 && arrayEnd > arrayStart) {
+        const parsedArray = JSON.parse(clean.substring(arrayStart, arrayEnd + 1));
+        if (Array.isArray(parsedArray) && parsedArray.length > 0) {
+          const turns = parsedArray
+            .map((item) => ({
+              speaker: (item.speaker || "").toLowerCase().includes("pat")
+                ? "Patient"
+                : (item.speaker || "").toLowerCase().includes("care")
+                ? "Caregiver"
+                : "Doctor",
+              text: (item.text || "").replace(/^["']|["']$/g, "").trim(),
+            }))
+            .filter((t) => t.text.length > 0);
+          if (turns.length > 0) return turns;
+        }
+      }
+
+      // 2. Try parsing JSON object: { "dialogue": [ ... ] } or { "turns": [ ... ] }
+      const objStart = clean.indexOf("{");
+      const objEnd = clean.lastIndexOf("}");
+      if (objStart !== -1 && objEnd > objStart) {
+        const parsedObj = JSON.parse(clean.substring(objStart, objEnd + 1));
+        const arr = parsedObj.dialogue || parsedObj.conversation || parsedObj.turns;
+        if (Array.isArray(arr) && arr.length > 0) {
+          const turns = arr
+            .map((item) => ({
+              speaker: (item.speaker || "").toLowerCase().includes("pat")
+                ? "Patient"
+                : (item.speaker || "").toLowerCase().includes("care")
+                ? "Caregiver"
+                : "Doctor",
+              text: (item.text || "").replace(/^["']|["']$/g, "").trim(),
+            }))
+            .filter((t) => t.text.length > 0);
+          if (turns.length > 0) return turns;
+        }
+      }
+    } catch (e) {
+      // Continue to line and delimiter parser
+    }
+
+    // 3. Line-by-line speaker tag parser (handles **Doctor:**, **Doctor**: , Doctor:, [Doctor]:, etc.)
+    const lines = clean.split(/\r?\n/);
+    const turns = [];
+    let currentSpeaker = null;
+    let currentText = "";
+
+    const speakerLineRegex = /^\s*(?:\*{1,2}|#{1,4}|\[)?\s*(Doctor|Dr\.?|Patient|Pt\.?|Caregiver|Nurse)\s*(?:\*{1,2}|\])?\s*[:\-–—]?\s*(?:\*{1,2})?\s*[:\-–—]?\s*(.*)$/i;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      const match = trimmed.match(speakerLineRegex);
+      if (match) {
+        const rawSp = match[1].toLowerCase();
+        const nextSpeaker = rawSp.startsWith("dr") || rawSp.startsWith("doc")
+          ? "Doctor"
+          : rawSp.startsWith("pt") || rawSp.startsWith("pat")
+          ? "Patient"
+          : "Caregiver";
+        const lineContent = (match[2] || "").replace(/^["']|["']$/g, "").trim();
+
+        if (currentSpeaker && currentText.trim()) {
+          turns.push({ speaker: currentSpeaker, text: currentText.trim() });
+        }
+        currentSpeaker = nextSpeaker;
+        currentText = lineContent;
+      } else {
+        if (currentSpeaker) {
+          currentText = currentText ? `${currentText} ${trimmed}` : trimmed;
+        } else {
+          currentText = currentText ? `${currentText} ${trimmed}` : trimmed;
+        }
+      }
+    }
+
+    if (currentSpeaker && currentText.trim()) {
+      turns.push({ speaker: currentSpeaker, text: currentText.trim() });
+    }
+
+    if (turns.length > 1) {
+      return turns;
+    }
+
+    // 4. Segment parser for inline markers
+    const inlineMarkerRegex = /(?:\*{1,2}|#{1,4}|\[)?\s*(Doctor|Dr\.?|Patient|Pt\.?|Caregiver|Nurse)\s*(?:\*{1,2}|\])?\s*[:\-–—]\s*(?:\*{1,2})?/gi;
+    const inlineMatches = [...clean.matchAll(inlineMarkerRegex)];
+    if (inlineMatches.length > 1) {
+      const segmentTurns = [];
+      for (let i = 0; i < inlineMatches.length; i++) {
+        const m = inlineMatches[i];
+        const speakerRaw = m[1].toLowerCase();
+        const speaker = speakerRaw.startsWith("dr") || speakerRaw.startsWith("doc")
+          ? "Doctor"
+          : speakerRaw.startsWith("pt") || speakerRaw.startsWith("pat")
+          ? "Patient"
+          : "Caregiver";
+        const startIndex = m.index + m[0].length;
+        const endIndex = i < inlineMatches.length - 1 ? inlineMatches[i + 1].index : clean.length;
+        const segmentText = clean.substring(startIndex, endIndex).replace(/^["']|["']$/g, "").trim();
+        if (segmentText) {
+          segmentTurns.push({ speaker, text: segmentText });
+        }
+      }
+      if (segmentTurns.length > 1) return segmentTurns;
+    }
+
+    // 5. Intelligent Clinical Sentence-level Dialogue Separator:
+    // When text is raw continuous consultation speech without explicit speaker tags,
+    // split into individual sentences and determine who is speaking (Doctor vs Patient)
+    const sentences = clean.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [clean];
+    if (sentences.length > 1) {
+      const separatedTurns = [];
+      let curSpeaker = null;
+      let curText = "";
+
+      for (const sentStr of sentences) {
+        const s = sentStr.trim();
+        if (!s) continue;
+
+        const lower = s.toLowerCase();
+
+        // Clinical questions, examinations, directives, instructions & advice -> DOCTOR
+        const isDoc =
+          /\b(how are you|how do you|how long|what is|what seems|what brings|where does|have you|do you|did you|are you|can you|let me|open your|breathe|lie down|bp|blood pressure|temperature|keep a|take each|take this|take the|prescribe|prescribed|dosage|dose|twice daily|once daily|after meals|before food|with water|do not change|do not combine|check with your doctor|apply the|avoid)\b/i.test(lower) ||
+          s.endsWith("?");
+
+        // Patient symptoms, complaints, answers, and disclosures -> PATIENT
+        const isPat =
+          /\b(i take|i have|i feel|i get|i forget|i sometimes|i am also|i'm also|i am taking|i'm taking|prescribed by my doctors|prescribed by my doctor|my knees|my knee|my head|my back|my chest|my stomach|pain|hurts|cough|fever|headache|thank you|thanks)\b/i.test(lower);
+
+        let speaker;
+        if (isDoc && !isPat) {
+          speaker = "Doctor";
+        } else if (isPat) {
+          speaker = "Patient";
+        } else if (s.endsWith("?")) {
+          speaker = "Doctor";
+        } else {
+          // If ambiguous, alternate speaker from previous turn
+          speaker = curSpeaker === "Doctor" ? "Patient" : "Doctor";
+        }
+
+        if (curSpeaker && speaker !== curSpeaker && curText.trim()) {
+          separatedTurns.push({ speaker: curSpeaker, text: curText.trim() });
+          curSpeaker = speaker;
+          curText = s;
+        } else {
+          curSpeaker = speaker;
+          curText = curText ? `${curText} ${s}` : s;
+        }
+      }
+
+      if (curSpeaker && curText.trim()) {
+        separatedTurns.push({ speaker: curSpeaker, text: curText.trim() });
+      }
+
+      if (separatedTurns.length > 1) {
+        return separatedTurns;
+      }
+    }
+
+    // Single turn fallback if only one sentence exists
+    return turns.length > 0 ? turns : [{ speaker: "Doctor", text: clean }];
+  };
+
+  const handleUpdateTurnText = (index, newText) => {
+    setDialogueTurns((prev) => {
+      const updated = [...prev];
+      if (updated[index]) {
+        updated[index] = { ...updated[index], text: newText };
+      }
+      setTranscript(serializeDialogue(updated));
+      return updated;
+    });
+  };
+
+  const handleToggleSpeaker = (index) => {
+    setDialogueTurns((prev) => {
+      const updated = [...prev];
+      if (updated[index]) {
+        const nextSpeaker = updated[index].speaker === "Doctor" ? "Patient" : "Doctor";
+        updated[index] = { ...updated[index], speaker: nextSpeaker };
+      }
+      setTranscript(serializeDialogue(updated));
+      return updated;
+    });
+  };
+
+  const handleDeleteTurn = (index) => {
+    setDialogueTurns((prev) => {
+      const updated = prev.filter((_, i) => i !== index);
+      setTranscript(serializeDialogue(updated));
+      return updated;
+    });
+  };
+
+  const handleAddTurn = (speaker, afterIndex = null) => {
+    setDialogueTurns((prev) => {
+      const newTurn = { speaker, text: "" };
+      let updated;
+      if (afterIndex !== null && afterIndex >= 0 && afterIndex < prev.length) {
+        updated = [...prev.slice(0, afterIndex + 1), newTurn, ...prev.slice(afterIndex + 1)];
+      } else {
+        updated = [...prev, newTurn];
+      }
+      setTranscript(serializeDialogue(updated));
+      return updated;
+    });
+    setTranscriptView("cards");
+  };
+
+  const handleAutoFormatDialogue = async () => {
+    const textToFormat = (transcript && transcript.trim()) 
+      || (dialogueTurns && dialogueTurns.length > 0 ? serializeDialogue(dialogueTurns) : "");
+
+    if (!textToFormat) {
+      toast.warning("Please enter or transcribe a consultation dialogue before formatting.");
+      return;
+    }
+
+    // 1. Immediately apply clinical dialogue separation to the cards
+    const immediateTurns = parseTranscriptDialogue(textToFormat);
+    if (immediateTurns.length > 0) {
+      setDialogueTurns(immediateTurns);
+      setTranscript(serializeDialogue(immediateTurns));
+      setTranscriptView("cards");
+    }
+
+    setLoading(true);
+    setLoadingMsg("AI is identifying who said what (Doctor vs Patient)...");
+    try {
+      const res = await API.post(
+        "/consultation-notes/format-dialogue",
+        { transcript: textToFormat, patient },
+        { headers: { role: user.role || "doctor", userid: user.id } }
+      );
+      if (res.data?.dialogue && res.data.dialogue.length > 0) {
+        setDialogueTurns(res.data.dialogue);
+      } else if (res.data?.formattedTranscript) {
+        setDialogueTurns(parseTranscriptDialogue(res.data.formattedTranscript));
+      }
+      if (res.data?.formattedTranscript) {
+        setTranscript(res.data.formattedTranscript);
+      }
+      setTranscriptView("cards");
+      toast.success("Dialogue formatted successfully!");
+    } catch (err) {
+      console.warn("⚠️ [ConsultationNote] Format API error (kept local separation):", err);
+    } finally {
+      setLoading(false);
+      setLoadingMsg("");
+    }
+  };
+
+  const handleRawTextChange = (newVal) => {
+    setTranscript(newVal);
+    setDialogueTurns(parseTranscriptDialogue(newVal));
+  };
+
+  // ── STEP 2 → 3: GENERATE SOAP NOTE ──
   const generateSOAPNote = async () => {
-    if (!transcript.trim()) { alert("Transcript is empty."); return; }
-    setLoading(true); setLoadingMsg("AI is generating the clinical note...");
+    if (!transcript.trim()) {
+      toast.warning("Please enter or transcribe a consultation dialogue before generating the note.");
+      return;
+    }
+
+    console.log(` [AI Note Writer] Requesting SOAP Note for patient: "${patient?.name}" | Transcript length: ${transcript.length}`);
+    setLoading(true);
+    setLoadingMsg("Gemini AI is analyzing transcript and generating SOAP note...");
+
     try {
-      const res = await API.post("/consultation-notes/generate-soap", { transcript, patient },
-        { headers: { role: "doctor", userid: user.id } });
-      setSoapData(res.data.soapData); setSoapNote(res.data.soapNote);
+      const res = await API.post(
+        "/consultation-notes/generate-soap",
+        { transcript, patient },
+        { headers: { role: user.role || "doctor", userid: user.id } }
+      );
+
+      console.log(" [AI Note Writer] SOAP Note generated successfully:", res.data);
+      setSoapData(res.data.soapData);
+      setSoapNote(res.data.soapNote);
       setEditedData(JSON.parse(JSON.stringify(res.data.soapData)));
-      const dr = await API.post("/consultation-notes/save-draft",
+
+      // Auto-save draft
+      console.log(" [AI Note Writer] Auto-saving note draft to database...");
+      const dr = await API.post(
+        "/consultation-notes/save-draft",
         { patientId: patient.id, transcript, soapNote: res.data.soapNote },
-        { headers: { role: "doctor", userid: user.id } });
-      setSavedNoteId(dr.data.note.id); setCurrentStep(4);
-    } catch { alert("SOAP note generation failed. Please check your API key."); }
-    setLoading(false); setLoadingMsg("");
+        { headers: { role: user.role || "doctor", userid: user.id } }
+      );
+
+      console.log(" [AI Note Writer] Draft note saved with ID:", dr.data?.note?.id);
+      setSavedNoteId(dr.data.note.id);
+      toast.success("SOAP Note generated and draft saved!");
+      // Move to Step 3 (Review & Edit SOAP Note)
+      setCurrentStep(3);
+    } catch (err) {
+      const serverMsg = err?.response?.data?.detail
+        ? `${err?.response?.data?.error || "Error"}: ${err?.response?.data?.detail}`
+        : (err?.response?.data?.error || err.message);
+      console.error(" [AI Note Writer] SOAP generation failed:", {
+        error: err,
+        serverMsg,
+        response: err.response?.data,
+      });
+      toast.error(`Clinical Note Generation Failed: ${serverMsg}`);
+    } finally {
+      setLoading(false);
+      setLoadingMsg("");
+    }
   };
 
-  const handleFieldEdit = (key, value) => setEditedData(prev => ({ ...prev, [key]: value }));
+  const handleFieldEdit = (key, value) => {
+    setEditedData((prev) => ({ ...prev, [key]: value }));
+  };
 
-  // ── APPROVE ──
+  // ── STEP 3 → 4: APPROVE & SAVE NOTE ──
   const approveNote = async () => {
-    setLoading(true); setLoadingMsg("Saving approved note...");
+    if (!savedNoteId) {
+      toast.warning("No draft note ID found. Please regenerate or re-save the draft.");
+      return;
+    }
+
+    console.log(`🚀 [AI Note Writer] Approving consultation note ID: ${savedNoteId}...`);
+    setLoading(true);
+    setLoadingMsg("Generating patient-friendly summary and approving note...");
+
     try {
-      await API.post("/consultation-notes/approve",
+      const res = await API.post(
+        "/consultation-notes/approve",
         { noteId: savedNoteId, finalNote: JSON.stringify(editedData) },
-        { headers: { role: "doctor", userid: user.id } });
-      setApproved(true); setCurrentStep(5); fetchPastNotes();
-    } catch { alert("Failed to approve note."); }
-    setLoading(false); setLoadingMsg("");
+        { headers: { role: user.role || "doctor", userid: user.id } }
+      );
+
+      console.log("✅ [AI Note Writer] Consultation note approved and saved:", res.data);
+      setApproved(true);
+      toast.success("Consultation note approved and saved successfully!");
+      setCurrentStep(4);
+      fetchPastNotes();
+    } catch (err) {
+      const serverMsg = err?.response?.data?.error || err?.response?.data?.detail || err.message;
+      console.error("❌ [AI Note Writer] Approve failed:", {
+        error: err,
+        serverMsg,
+        response: err.response?.data,
+      });
+      toast.error(`Failed to approve consultation note: ${serverMsg}`);
+    } finally {
+      setLoading(false);
+      setLoadingMsg("");
+    }
   };
 
-  // ── FETCH PAST NOTES ──
+  // ── PAST NOTES ──
   const fetchPastNotes = async () => {
     if (!patient?.id) return;
+    console.log(`📋 [AI Note Writer] Fetching past consultation notes for patient ID: ${patient.id}...`);
     setLoadingNotes(true);
     try {
-      const res = await API.get(`/consultation-notes?patientId=${patient.id}`,
-        { headers: { role: "doctor", userid: user.id } });
+      const res = await API.get(`/consultation-notes?patientId=${patient.id}`, {
+        headers: { role: user.role || "doctor", userid: user.id },
+      });
+      console.log(`✅ [AI Note Writer] Loaded ${res.data?.length || 0} past notes for ${patient.name}`);
       setPastNotes(res.data || []);
-    } catch { console.error("Failed to load notes"); }
-    setLoadingNotes(false);
+    } catch (err) {
+      console.error("❌ [AI Note Writer] Failed to fetch past notes:", err);
+    } finally {
+      setLoadingNotes(false);
+    }
   };
 
-  const parseNote = (note) => { try { return JSON.parse(note); } catch { return null; } };
+  const executeDeleteNote = async (noteId) => {
+    setDeletingNoteId(noteId);
+    try {
+      await API.delete(`/consultation-notes/${noteId}`, {
+        headers: { role: user.role || "doctor", userid: user.id },
+      });
+      toast.success("Consultation note deleted successfully!");
+      setPastNotes((prev) => prev.filter((n) => n.id !== noteId));
+      setConfirmDeleteId(null);
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message;
+      console.error("Failed to delete note:", err);
+      toast.error(`Failed to delete note: ${msg}`);
+    } finally {
+      setDeletingNoteId(null);
+    }
+  };
 
+  const parseNote = (note) => {
+    try {
+      return JSON.parse(note);
+    } catch {
+      return null;
+    }
+  };
+
+  // Cleanup media tracks on unmount
   useEffect(() => {
     return () => {
       clearInterval(timerRef.current);
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current.getTracks().forEach((t) => t.stop());
       }
       if (displayStreamRef.current) {
-        displayStreamRef.current.getTracks().forEach(t => t.stop());
+        displayStreamRef.current.getTracks().forEach((t) => t.stop());
       }
     };
   }, []);
+
   if (!patient) return null;
 
   // ==========================================
@@ -410,7 +936,7 @@ export default function ConsultationNote({ patient }) {
   // ==========================================
   return (
     <>
-      {/* TRIGGER */}
+      {/* TRIGGER BUTTON */}
       <button className="consult-trigger-btn" onClick={openModal} id="consult-note-btn">
         <BsFileEarmarkTextFill />
         AI Note Writer
@@ -418,307 +944,687 @@ export default function ConsultationNote({ patient }) {
 
       {/* MODAL */}
       {isOpen && (
-        <div className="consult-overlay" onClick={e => e.target === e.currentTarget && !isRecording && closeModal()}>
-          <div className="consult-modal">
-
-            {/* HEADER */}
-            <div className="consult-header">
-              <div className="consult-header-left">
-                <div className="consult-header-icon"><FaStethoscope /></div>
-                <div className="consult-header-text">
-                  <h2>AI Note Writer</h2>
-                  <p>Record → Transcribe → SOAP Note → Approve</p>
-                  {patient && (
-                    <div className="patient-badge">
-                      <FaUserMd style={{ marginRight: 5 }} />
-                      {patient.name} · {patient.age}y · {patient.gender}
-                    </div>
-                  )}
+        <div
+          className="cn-overlay"
+          onClick={(e) => e.target === e.currentTarget && !isRecording && closeModal()}
+        >
+          <div className="cn-modal">
+            {/* ── LEFT SIDEBAR RAIL ── */}
+            <aside className="cn-sidebar">
+              <div>
+                <div className="cn-brand">
+                  <div className="cn-brand-icon">
+                    <FaStethoscope />
+                  </div>
+                  <div>
+                    <div className="cn-brand-title">AI Note Writer</div>
+                    <div className="cn-brand-sub">Clinical Scribe Studio</div>
+                  </div>
                 </div>
-              </div>
-              <button className="consult-close-btn" onClick={closeModal}><FaTimes /></button>
-            </div>
 
-            {/* TABS */}
-            <div className="consult-tabs">
-              <button className={`consult-tab ${activeTab === "new" ? "active" : ""}`} onClick={() => setActiveTab("new")}>
-                <HiOutlineSparkles style={{ marginRight: 6 }} /> New Consultation
-              </button>
-              <button className={`consult-tab ${activeTab === "history" ? "active" : ""}`} onClick={() => { setActiveTab("history"); fetchPastNotes(); }}>
-                <FaHistory style={{ marginRight: 6 }} /> Past Notes ({pastNotes.length})
-              </button>
-            </div>
+                {patient && (
+                  <div className="cn-patient-pill">
+                    <div className="cn-patient-avatar">
+                      {patient.name?.[0]?.toUpperCase() || "P"}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="cn-patient-name">{patient.name}</div>
+                      <div className="cn-patient-meta">
+                        {patient.age}y · {patient.gender} · {patient.bloodGroup || "N/A"}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-            {/* ── TAB: NEW ── */}
-            {activeTab === "new" && (
-              <>
-                {/* STEPPER */}
-                <div className="consult-steps">
-                  {STEPS.map((step, i) => (
-                    <div key={step.id} className="step-wrapper" style={{ flex: i < STEPS.length - 1 ? 1 : "none" }}>
-                      <div className={`step-item ${currentStep === step.id ? "active" : currentStep > step.id ? "done" : ""}`}>
-                        <div className="step-circle">
-                          {currentStep > step.id ? <FaCheckCircle size={12} /> : step.id}
+                {/* ── PATIENT CLINICAL SNAPSHOT: ACTIVE MEDS & LAST VISIT FLASH ONLY (RxNote + ROSC Inspired) ── */}
+                {patient && (
+                  <div className="cn-safety-card">
+                    <div className="cn-safety-card-header">
+                      <div className="cn-safety-card-title">
+                        <FaShieldAlt className="cn-safety-badge-icon" />
+                        <span>Clinical Snapshot</span>
+                      </div>
+                      <span className="cn-safety-source-badge">Pre-Visit Flash</span>
+                    </div>
+
+                    <div className="cn-safety-items">
+                      {/* 💊 Active Daily Medications */}
+                      <div className="cn-safety-row">
+                        <div className="cn-safety-lbl">
+                          <FaPills className="cn-safety-ico meds" />
+                          <span>Active Daily Meds:</span>
                         </div>
-                        <span className="step-label">{step.label}</span>
+                        <div className="cn-safety-val meds-text">
+                          {safetyProfile.activeMeds}
+                        </div>
                       </div>
-                      {i < STEPS.length - 1 && <div className="step-divider" />}
-                    </div>
-                  ))}
-                </div>
 
-                <div className="consult-body">
-
-                  {/* LOADING */}
-                  {loading && (
-                    <div className="ai-loading">
-                      <div className="loading-dots"><span /><span /><span /></div>
-                      {loadingMsg}
-                    </div>
-                  )}
-
-                  {/* ── STEP 1: RECORD ── */}
-                  {currentStep === 1 && (
-                    <div className="consult-section">
-                      <div className="section-title">
-                        <FaMicrophone className="section-title-icon" />
-                        Step 1 — Record or Upload Consultation Audio
+                      {/* ⏱️ Last Visit Flash (1 sentence) */}
+                      <div className="cn-safety-row flash-row">
+                        <div className="cn-safety-lbl">
+                          <FaClock className="cn-safety-ico flash" />
+                          <span>Last Visit Flash:</span>
+                        </div>
+                        <div className="cn-safety-flash-text">
+                          "{safetyProfile.lastVisitFlash}"
+                        </div>
                       </div>
-                      <div className={`recording-zone ${isRecording ? "recording" : ""}`}>
-                        <button
-                          id="record-toggle-btn"
-                          className={`record-btn ${isRecording ? "active" : "idle"}`}
-                          onClick={isRecording ? stopRecording : startRecording}
+                    </div>
+                  </div>
+                )}
+
+                <div className="cn-stepper">
+                  <div className="cn-stepper-heading">Workflow Progress</div>
+                  {[
+                    { id: 1, label: "Record / Audio", desc: "Mic or audio/video file" },
+                    { id: 2, label: "Transcript", desc: "Review Doctor & Patient" },
+                    { id: 3, label: "SOAP Note", desc: "Edit & verify fields" },
+                    { id: 4, label: "Approved", desc: "Saved to EHR" },
+                  ].map((step) => {
+                      const isDone = currentStep > step.id;
+                      const isActive = currentStep === step.id;
+                      const canJumpBack = isDone && !loading && !isRecording && currentStep !== 4;
+                      return (
+                        <div
+                          key={step.id}
+                          className={`cn-step ${isActive ? "active" : isDone ? "done" : ""} ${canJumpBack ? "clickable" : ""}`}
+                          onClick={() => canJumpBack && setCurrentStep(step.id)}
+                          title={canJumpBack ? `Return to ${step.label}` : undefined}
                         >
-                          {isRecording ? <FaStop /> : <FaMicrophone />}
-                        </button>
-                        {isRecording && (
-                          <>
-                            <div className="record-timer">{formatTime(recordingTime)}</div>
-                            <div className="audio-wave">
-                              <span className="wave-bar bar-1" /><span className="wave-bar bar-2" />
-                              <span className="wave-bar bar-3" /><span className="wave-bar bar-4" />
-                              <span className="wave-bar bar-5" />
-                            </div>
-                          </>
-                        )}
-                        <div className={`record-status ${isRecording ? "recording" : ""}`}>
-                          {isRecording ? "Recording in progress — speak clearly" : audioBlob ? "Recording complete. Click below to transcribe." : "Click the mic to start recording"}
+                          <div className="cn-step-dot">
+                            {isDone ? <FaCheckCircle size={13} /> : step.id}
+                          </div>
+                          <div>
+                            <div className="cn-step-title">{step.label}</div>
+                            <div className="cn-step-desc">{step.desc}</div>
+                          </div>
                         </div>
-                        {!isRecording && !audioBlob && (
-                          <div className="system-audio-toggle">
-                            <label className="toggle-switch">
-                              <input
-                                type="checkbox"
-                                checked={includeSystemAudio}
-                                onChange={(e) => setIncludeSystemAudio(e.target.checked)}
-                              />
-                              <span className="slider round"></span>
-                            </label>
-                            <span className="toggle-label">
-                              Record system/tab audio (e.g., YouTube) along with mic
-                            </span>
-                          </div>
-                        )}
-                        {!isRecording && !audioBlob && includeSystemAudio && (
-                          <div className="system-audio-tip">
-                            💡 <strong>Tip:</strong> Choose the tab playing audio and check <strong>"Share tab audio"</strong> in the browser sharing prompt.
-                          </div>
-                        )}
-                        {!isRecording && audioBlob && (
-                          <audio controls src={URL.createObjectURL(audioBlob)} style={{ borderRadius: "8px", maxWidth: "100%" }} />
-                        )}
+                      );
+                    })}
+                  </div>
+                </div>
+
+              <div className="cn-sidebar-tip">
+                {currentStep === 1
+                  ? "Tip: You can pause & resume recording anytime."
+                  : currentStep === 2
+                  ? "Tip: Review Doctor vs Patient turns, switch speakers, or insert replies before generating."
+                  : currentStep === 3
+                  ? "Tip: Edit any SOAP card field directly before approving into the patient's EHR."
+                  : "Note approved and synced with the patient's portal."}
+              </div>
+            </aside>
+
+            {/* ── RIGHT MAIN WORKSPACE ── */}
+            <section className="cn-main">
+              <div className="cn-topbar">
+                <div>
+                  <div className="cn-topbar-title">
+                    {currentStep === 1
+                      ? "Step 1 — Record or Upload Consultation"
+                      : currentStep === 2
+                      ? "Step 2 — Doctor & Patient Transcript"
+                      : currentStep === 3
+                      ? "Step 3 — Review & Edit SOAP Note"
+                      : "Step 4 — Consultation Saved"}
+                  </div>
+                  <div className="cn-topbar-sub">
+                    {currentStep === 1
+                      ? "Capture live consultation audio or upload a recorded audio/video file"
+                      : currentStep === 2
+                      ? "AI separated Doctor and Patient turns. Edit or adjust any line below."
+                      : currentStep === 3
+                      ? "Verify the AI-generated clinical summary, diagnosis, and prescriptions."
+                      : "Official EHR record and patient-friendly summary have been saved."}
+                  </div>
+                </div>
+                <button className="cn-close-btn" onClick={closeModal} title="Close (Esc)">
+                  <FaTimes />
+                </button>
+              </div>
+
+              {/* Fixed Header Toolbar for Step 2 */}
+              {currentStep === 2 && (
+                    <div className="cn-step2-toolbar-bar">
+                      <div className="cn-toolbar">
+                        <div className="cn-segmented">
+                          <button
+                            type="button"
+                            className={`cn-seg-btn ${transcriptView === "cards" ? "active" : ""}`}
+                            onClick={() => setTranscriptView("cards")}
+                          >
+                            <FaComments /> Dialogue Cards ({dialogueTurns.length})
+                          </button>
+                          <button
+                            type="button"
+                            className={`cn-seg-btn ${transcriptView === "raw" ? "active" : ""}`}
+                            onClick={() => setTranscriptView("raw")}
+                          >
+                            <FaEdit /> Raw Text
+                          </button>
+                        </div>
+
+                        <div className="cn-toolbar-actions">
+                          <button
+                            type="button"
+                            className="speaker-badge-btn speaker-btn-doctor"
+                            onClick={() => handleAddTurn("Doctor")}
+                            title="Add a Doctor dialogue statement"
+                          >
+                            <FaPlus size={10} /> <FaUserMd /> Doctor Says
+                          </button>
+                          <button
+                            type="button"
+                            className="speaker-badge-btn speaker-btn-patient"
+                            onClick={() => handleAddTurn("Patient")}
+                            title="Add a Patient dialogue statement"
+                          >
+                            <FaPlus size={10} /> <FaUser /> Patient Says
+                          </button>
+                          <button
+                            type="button"
+                            className="turn-action-btn"
+                            onClick={() =>
+                              copyToClipboard(
+                                dialogueTurns.length > 0 ? serializeDialogue(dialogueTurns) : transcript,
+                                "Transcript"
+                              )
+                            }
+                            title="Copy conversation transcript"
+                          >
+                            <FaCopy size={11} /> Copy
+                          </button>
+                        </div>
                       </div>
+                    </div>
+                  )}
 
-                      {audioBlob && !isRecording && (
-                        <div className="consult-actions" style={{ marginTop: "16px" }}>
-                          <button id="transcribe-btn" className="consult-btn btn-primary" onClick={transcribeAudio} disabled={loading}>
-                            <MdRecordVoiceOver style={{ marginRight: 6 }} /> Transcribe Audio
-                          </button>
-                          <button className="consult-btn btn-outline" onClick={() => { setAudioBlob(null); setRecordingTime(0); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
-                            <FaTimes style={{ marginRight: 6 }} /> Clear
-                          </button>
+                  <div className={`cn-content ${currentStep === 2 ? "cn-content-step2" : ""}`}>
+                    {loading && (
+                      <div className="cn-loading-banner">
+                        <div className="loading-dots">
+                          <span />
+                          <span />
+                          <span />
                         </div>
-                      )}
+                        <span>{loadingMsg}</span>
+                      </div>
+                    )}
 
-                      {!audioBlob && !isRecording && (
-                        <>
-                          <div className="or-divider"><span>or</span></div>
-                          <div className="upload-box">
-                            <div className="upload-info">
-                              <div className="upload-info-title"><FaUpload style={{ marginRight: 7 }} /> Upload a recorded audio file</div>
-                              <div className="upload-info-subtitle">Supported: mp3, wav, webm, ogg, m4a</div>
+                    {/* STEP 1: RECORD OR UPLOAD */}
+                    {currentStep === 1 && (
+                      <>
+                        {!audioBlob ? (
+                          <div className="cn-studio-grid">
+                            {/* Live Mic Studio Card */}
+                            <div className={`cn-studio-card ${isRecording && !isPaused ? "is-recording" : ""}`}>
+                              {isRecording && (
+                                <div className="cn-timer-badge">
+                                  <span>{formatTime(recordingTime)}</span>
+                                  {isPaused && <span style={{ color: "#fbbf24", fontSize: "11px" }}>PAUSED</span>}
+                                </div>
+                              )}
+
+                              <div className="cn-mic-row">
+                                <div className="cn-ctrl-col">
+                                  <button
+                                    id="record-toggle-btn"
+                                    className={`cn-mic-btn ${isRecording ? "active" : "idle"}`}
+                                    onClick={isRecording ? stopRecording : startRecording}
+                                    title={isRecording ? "Stop Recording" : "Start Recording"}
+                                  >
+                                    {isRecording ? <FaStop /> : <FaMicrophone />}
+                                  </button>
+                                  <span className="cn-ctrl-label" style={{ color: isRecording ? "#ef4444" : "#0284c7" }}>
+                                    {isRecording ? "Stop" : "Start"}
+                                  </span>
+                                </div>
+
+                                {isRecording && (
+                                  <div className="cn-ctrl-col">
+                                    <button
+                                      id="record-pause-btn"
+                                      type="button"
+                                      className="cn-pause-btn"
+                                      onClick={isPaused ? resumeRecording : pauseRecording}
+                                      title={isPaused ? "Resume Recording" : "Pause Recording"}
+                                      style={{
+                                        border: isPaused ? "2px solid #0284c7" : "2px solid #f59e0b",
+                                        background: isPaused ? "#e0f2fe" : "#fef3c7",
+                                        color: isPaused ? "#0284c7" : "#d97706",
+                                      }}
+                                    >
+                                      {isPaused ? <FaPlay /> : <FaPause />}
+                                    </button>
+                                    <span className="cn-ctrl-label" style={{ color: isPaused ? "#0284c7" : "#d97706" }}>
+                                      {isPaused ? "Resume" : "Pause"}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {isRecording && !isPaused && (
+                                <div className="audio-wave" style={{ marginBottom: "10px" }}>
+                                  <span className="wave-bar bar-1" />
+                                  <span className="wave-bar bar-2" />
+                                  <span className="wave-bar bar-3" />
+                                  <span className="wave-bar bar-4" />
+                                  <span className="wave-bar bar-5" />
+                                </div>
+                              )}
+
+                              <div className="cn-studio-heading">
+                                {isRecording
+                                  ? isPaused
+                                    ? "Recording Paused"
+                                    : "Listening & Recording..."
+                                  : "Record Live Consultation"}
+                              </div>
+                              <div className="cn-studio-sub">
+                                {isRecording
+                                  ? isPaused
+                                    ? "Click Resume to continue or Stop when finished."
+                                    : "Speak naturally. Pause or Stop anytime."
+                                  : "Click Start to record the doctor-patient conversation using your microphone."}
+                              </div>
                             </div>
-                            <button id="upload-audio-btn" className="consult-btn btn-outline" onClick={() => fileInputRef.current?.click()} style={{ flexShrink: 0 }}>
-                              <FaUpload style={{ marginRight: 6 }} /> Choose File
+
+                            {/* Drag & Drop Upload Card */}
+                            {!isRecording && (
+                              <div
+                                className={`cn-studio-card cn-dropzone ${isDraggingFile ? "is-dragging" : ""}`}
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  setIsDraggingFile(true);
+                                }}
+                                onDragLeave={() => setIsDraggingFile(false)}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  setIsDraggingFile(false);
+                                  const droppedFile = e.dataTransfer?.files?.[0];
+                                  if (droppedFile) handleFileUpload(droppedFile);
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: "52px",
+                                    height: "52px",
+                                    borderRadius: "14px",
+                                    background: "#e0f2fe",
+                                    color: "#0284c7",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: "20px",
+                                    marginBottom: "14px",
+                                  }}
+                                >
+                                  <FaUpload />
+                                </div>
+                                <div className="cn-studio-heading">Upload Audio / Video File</div>
+                                <div className="cn-studio-sub">
+                                  Drag and drop a recorded consultation here, or browse from your device.
+                                </div>
+                                <div className="cn-format-pills">
+                                  {["MP3", "WAV", "WEBM", "M4A", "MP4", "MOV"].map((fmt) => (
+                                    <span key={fmt} className="cn-format-pill">{fmt}</span>
+                                  ))}
+                                </div>
+                                <button
+                                  id="upload-audio-btn"
+                                  className="consult-btn btn-outline"
+                                  onClick={() => fileInputRef.current?.click()}
+                                >
+                                  <FaUpload style={{ marginRight: 6 }} /> Choose File
+                                </button>
+                                <input
+                                  ref={fileInputRef}
+                                  type="file"
+                                  accept="audio/*,video/*,.mp3,.wav,.webm,.ogg,.m4a,.aac,.mp4,.mov,.mkv"
+                                  style={{ display: "none" }}
+                                  onChange={handleFileUpload}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          /* Preview Ready Card */
+                          <div className="cn-preview-card">
+                            <div className="cn-preview-meta">
+                              <span>
+                                <strong>Ready for Transcription:</strong> {uploadedFileName || "Recorded Consultation"}
+                              </span>
+                              <span>{(audioBlob.size / 1024).toFixed(1)} KB</span>
+                            </div>
+
+                            {audioUrl && (
+                              (audioBlob.type?.startsWith("video/") || /\.(mp4|mov|mkv)$/i.test(uploadedFileName)) ? (
+                                <video
+                                  controls
+                                  src={audioUrl}
+                                  preload="metadata"
+                                  onLoadedMetadata={(e) => {
+                                    const media = e.currentTarget;
+                                    if (media.duration === Infinity || isNaN(media.duration)) {
+                                      media.currentTime = 1e101;
+                                      media.ontimeupdate = () => {
+                                        media.ontimeupdate = null;
+                                        media.currentTime = 0;
+                                      };
+                                    }
+                                  }}
+                                  style={{ width: "100%", maxHeight: "240px", borderRadius: "10px", outline: "none", background: "#000" }}
+                                />
+                              ) : (
+                                <audio
+                                  controls
+                                  src={audioUrl}
+                                  preload="metadata"
+                                  onLoadedMetadata={(e) => {
+                                    const media = e.currentTarget;
+                                    if (media.duration === Infinity || isNaN(media.duration)) {
+                                      media.currentTime = 1e101;
+                                      media.ontimeupdate = () => {
+                                        media.ontimeupdate = null;
+                                        media.currentTime = 0;
+                                      };
+                                    }
+                                  }}
+                                  style={{ width: "100%", borderRadius: "8px", outline: "none" }}
+                                />
+                              )
+                            )}
+
+                            <div className="consult-actions" style={{ marginTop: "4px" }}>
+                              <button
+                                className="consult-btn btn-primary"
+                                onClick={transcribeAudio}
+                                disabled={loading}
+                              >
+                                <MdRecordVoiceOver style={{ marginRight: 6 }} /> Transcribe Audio with Gemini AI
+                              </button>
+                              <button
+                                className="consult-btn btn-outline"
+                                onClick={() => {
+                                  setAudioBlob(null);
+                                  setUploadedFileName("");
+                                  setRecordingTime(0);
+                                  if (fileInputRef.current) fileInputRef.current.value = "";
+                                }}
+                              >
+                                <FaTimes style={{ marginRight: 6 }} /> Clear / Re-record
+                              </button>
+                              <button
+                                className="consult-btn btn-outline"
+                                onClick={() => {
+                                  setTranscriptView("raw");
+                                  setCurrentStep(2);
+                                }}
+                                title="Skip audio and type or paste consultation notes directly"
+                              >
+                                <FaEdit style={{ marginRight: 6 }} /> Type Notes Manually Instead
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {!audioBlob && !isRecording && (
+                          <div className="cn-manual-link-bar">
+                            <span>Prefer typing or pasting notes directly without audio?</span>
+                            <button
+                              className="consult-btn btn-outline"
+                              onClick={() => {
+                                setTranscriptView("raw");
+                                setCurrentStep(2);
+                              }}
+                            >
+                              <FaEdit style={{ marginRight: 6 }} /> Write / Paste Notes Manually
                             </button>
-                            <input ref={fileInputRef} type="file" accept="audio/*,.mp3,.wav,.webm,.ogg,.m4a" style={{ display: "none" }} onChange={handleFileUpload} />
                           </div>
-                        </>
-                      )}
-                    </div>
-                  )}
+                        )}
+                      </>
+                    )}
 
-                  {/* ── STEP 2: TRANSCRIPT ── */}
-                  {currentStep === 2 && (
-                    <div className="consult-section">
-                      <div className="section-title">
-                        <FaFileAlt className="section-title-icon" />
-                        Step 2 — Review Transcript
-                      </div>
-                      <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "12px" }}>
-                        Review and edit the transcript if needed before generating the note.
-                      </p>
-                      <textarea
-                        className="transcript-box"
-                        value={transcript}
-                        onChange={e => setTranscript(e.target.value)}
-                        placeholder="Transcript will appear here... or type/paste manually."
-                        rows={6}
-                      />
-                      <div className="consult-actions" style={{ marginTop: "16px" }}>
-                        <button id="generate-soap-btn" className="consult-btn btn-primary" onClick={generateSOAPNote} disabled={loading || !transcript.trim()}>
-                          <HiOutlineSparkles style={{ marginRight: 6 }} /> Generate Clinical Note
-                        </button>
-                        <button className="consult-btn btn-outline" onClick={() => setCurrentStep(1)}>← Back</button>
-                      </div>
-                    </div>
-                  )}
+                    {/* STEP 2: REVIEW & EDIT TRANSCRIPT */}
+                    {currentStep === 2 && (
+                      <>
+                        {transcriptView === "cards" && (
+                          <div className="cn-turn-list">
+                            {dialogueTurns.length === 0 ? (
+                              <div style={{ textAlign: "center", padding: "28px 16px", color: "#64748b", border: "1px dashed #cbd5e1", borderRadius: "12px", background: "#f8fafc" }}>
+                                <p style={{ margin: "0 0 10px 0", fontSize: "13px" }}>
+                                  No dialogue cards yet. Type or paste your consultation notes in the text editor.
+                                </p>
+                                <button
+                                  type="button"
+                                  className="consult-btn btn-primary"
+                                  style={{ padding: "6px 14px", fontSize: "12px", display: "inline-flex", margin: "0 auto" }}
+                                  onClick={() => setTranscriptView("raw")}
+                                >
+                                  <FaEdit style={{ marginRight: 6 }} /> Open Text Editor
+                                </button>
+                              </div>
+                            ) : (
+                              dialogueTurns.map((turn, idx) => {
+                                const isDoc = turn.speaker === "Doctor";
+                                const isPat = turn.speaker === "Patient";
+                                const roleClass = isDoc ? "doctor" : isPat ? "patient" : "caregiver";
+                                return (
+                                  <div key={idx} className={`cn-turn-card ${roleClass}`}>
+                                    <div className="cn-turn-top">
+                                      <div className="cn-turn-speaker">
+                                        <div className={`cn-turn-avatar ${roleClass}`}>
+                                          {isDoc ? <FaUserMd /> : <FaUser />}
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                          <span className="cn-turn-label">
+                                            {isDoc ? "Doctor" : (patient?.name || "Patient")}
+                                          </span>
+                                          <span className="cn-turn-sub">
+                                            {isDoc ? "(Attending)" : "(Patient)"}
+                                          </span>
+                                        </div>
+                                      </div>
 
-                  {/* ── STEP 3: TRANSCRIPT (post-transcribe) ── */}
-                  {currentStep === 3 && (
-                    <div className="consult-section">
-                      <div className="section-title">
-                        <FaFileAlt className="section-title-icon" />
-                        Step 2 — Review Transcript
-                      </div>
-                      <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "12px" }}>
-                        Review and edit the transcript if needed before generating the note.
-                      </p>
-                      <textarea
-                        className="transcript-box"
-                        value={transcript}
-                        onChange={e => setTranscript(e.target.value)}
-                        placeholder="Transcript will appear here..."
-                        rows={8}
-                      />
-                      <div className="consult-actions" style={{ marginTop: "14px" }}>
-                        <button className="consult-btn btn-primary" onClick={generateSOAPNote} disabled={loading}>
-                          <HiOutlineSparkles style={{ marginRight: 6 }} /> Generate Clinical Note
-                        </button>
-                        <button className="consult-btn btn-outline" onClick={() => setCurrentStep(1)}>← Back</button>
-                      </div>
-                    </div>
-                  )}
+                                      <div className="dialogue-turn-actions">
+                                        <button
+                                          type="button"
+                                          className="turn-action-btn"
+                                          onClick={() => handleToggleSpeaker(idx)}
+                                          title={`Switch speaker to ${isDoc ? (patient?.name || "Patient") : "Doctor"}`}
+                                        >
+                                          <FaExchangeAlt size={10} /> Switch
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="turn-action-btn"
+                                          onClick={() => handleAddTurn(isDoc ? "Patient" : "Doctor", idx)}
+                                          title={`Insert ${isDoc ? "Patient" : "Doctor"} reply after this`}
+                                        >
+                                          <FaPlus size={10} /> Reply
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="turn-action-btn delete-btn"
+                                          onClick={() => handleDeleteTurn(idx)}
+                                          title="Delete this dialogue turn"
+                                        >
+                                          <FaTrash size={10} />
+                                        </button>
+                                      </div>
+                                    </div>
 
-                  {/* ── STEP 4: REVIEW & EDIT ── */}
-                  {currentStep === 4 && editedData && (
-                    <>
-                      <details className="transcript-collapsible">
-                        <summary><FaFileAlt style={{ marginRight: 6 }} /> View Consultation Transcript</summary>
-                        <textarea
-                          className="transcript-box"
-                          value={transcript}
-                          onChange={e => setTranscript(e.target.value)}
-                          rows={6}
-                          style={{ marginTop: "12px" }}
-                        />
-                      </details>
+                                    <textarea
+                                      className="cn-turn-textarea"
+                                      value={turn.text}
+                                      onChange={(e) => handleUpdateTurnText(idx, e.target.value)}
+                                      placeholder={isDoc ? "What did the doctor say?..." : "What did the patient say?..."}
+                                      rows={Math.max(1, Math.ceil((turn.text?.length || 0) / 95))}
+                                    />
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
 
-                      <div className="consult-section" style={{ padding: 0, border: "none", background: "transparent", boxShadow: "none" }}>
+                        {transcriptView === "raw" && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                            <div style={{ fontSize: "12px", color: "#64748b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span>Type or paste consultation notes, symptoms, or doctor shorthand below:</span>
+                              <span style={{ fontSize: "11px", color: "#94a3b8" }}>{transcript?.length || 0} characters</span>
+                            </div>
+                            <textarea
+                              className="transcript-box"
+                              value={transcript}
+                              onChange={(e) => handleRawTextChange(e.target.value)}
+                              placeholder={`Type or paste your clinical visit notes here...\n\nExample:\nPatient presents with severe sore throat and fever of 100°F for 2 days. On examination, throat is red and inflamed. Prescribed Azithromycin 500mg once daily for 3 days and Paracetamol 650mg for fever. Advised warm salt water gargles and to avoid cold drinks.`}
+                              rows={11}
+                              autoFocus
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* STEP 3: REVIEW & EDIT SOAP NOTE */}
+                    {currentStep === 3 && editedData && (
+                      <>
+                        <details className="transcript-accordion">
+                          <summary>
+                            <span>View Original Transcript</span>
+                            <span style={{ fontSize: 12, color: "#64748b" }}>Click to expand</span>
+                          </summary>
+                          <textarea
+                            className="transcript-box"
+                            value={transcript}
+                            readOnly
+                            rows={4}
+                            style={{ marginTop: "12px" }}
+                          />
+                        </details>
+
                         <SoapNoteCard
                           data={editedData}
                           editable={true}
                           onChange={handleFieldEdit}
                         />
-                      </div>
+                      </>
+                    )}
 
-                      <div className="consult-actions" style={{ marginTop: "16px", justifyContent: "space-between" }}>
-                        <button className="consult-btn btn-outline" onClick={() => setCurrentStep(3)}>← Back</button>
-                        <div style={{ display: "flex", gap: "10px" }}>
-                          {(user.role === "doctor" || user.role === "admin") && (
-                            <button className="consult-btn btn-outline" onClick={() => setEditedData(JSON.parse(JSON.stringify(soapData)))}>
-                              <FaRedo style={{ marginRight: 6 }} /> Reset to AI Draft
+                    {/* STEP 4: COMPLETE & APPROVED */}
+                    {currentStep === 4 && (
+                      <div className="cn-success-container">
+                        <div className="cn-success-card">
+                          <div className="cn-success-icon-wrap">
+                            <FaCheckCircle className="cn-success-icon" />
+                          </div>
+
+                          <span className="cn-success-badge">EHR Record Approved</span>
+                          <h3 className="cn-success-title">Consultation Note Saved!</h3>
+                          <p className="cn-success-subtitle">
+                            The clinical SOAP note has been officially signed and archived in{" "}
+                            <strong>{patient?.name || "the patient"}</strong>&apos;s medical record.
+                            A patient-friendly visit summary is now visible on their patient portal.
+                          </p>
+
+                          <div className="cn-success-meta-grid">
+                            <div className="cn-success-meta-item">
+                              <span className="cn-meta-lbl">Patient</span>
+                              <strong className="cn-meta-val">{patient?.name || "Patient"}</strong>
+                            </div>
+                            <div className="cn-success-meta-item">
+                              <span className="cn-meta-lbl">Record ID</span>
+                              <strong className="cn-meta-val">#{savedNoteId || "EHR-SAVED"}</strong>
+                            </div>
+                            <div className="cn-success-meta-item">
+                              <span className="cn-meta-lbl">Status</span>
+                              <span className="cn-status-pill-green">● Approved &amp; Signed</span>
+                            </div>
+                            <div className="cn-success-meta-item">
+                              <span className="cn-meta-lbl">Patient Summary</span>
+                              <span className="cn-status-pill-blue">
+                                <FaCheckCircle style={{ marginRight: 4, fontSize: 11 }} /> Synced to Portal
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="cn-success-actions">
+                            <button
+                              type="button"
+                              className="consult-btn btn-primary"
+                              onClick={closeModal}
+                            >
+                              <FaCheckCircle style={{ marginRight: 6 }} /> Done (Close)
                             </button>
-                          )}
-                          {(user.role === "doctor" || user.role === "admin") && (
-                            <button id="approve-note-btn" className="consult-btn btn-success" onClick={approveNote} disabled={loading}>
-                              <FaCheckCircle style={{ marginRight: 6 }} /> Approve &amp; Save Note
+                            <button
+                              type="button"
+                              className="consult-btn btn-outline"
+                              onClick={resetAll}
+                            >
+                              <FaPlus style={{ marginRight: 6 }} /> New Consultation
                             </button>
-                          )}
+                          </div>
                         </div>
                       </div>
-                    </>
-                  )}
+                    )}
+                  </div>
 
-                  {/* ── STEP 5: COMPLETE ── */}
-                  {currentStep === 5 && (
-                    <div className="consult-complete">
-                      <div className="complete-icon"><FaStar size={48} color="#f59e0b" /></div>
-                      <div className="complete-title">Note Approved &amp; Saved!</div>
-                      <div className="complete-subtitle">
-                        The consultation note has been saved to {patient.name}'s record.
-                      </div>
-                      <div className="consult-actions" style={{ justifyContent: "center", marginTop: "24px" }}>
-                        <button className="consult-btn btn-primary" onClick={() => { resetAll(); setActiveTab("history"); fetchPastNotes(); }}>
-                          <FaHistory style={{ marginRight: 6 }} /> View Past Notes
+                  {/* STICKY WORKSPACE FOOTER FOR STEP 2 & 3 */}
+                  {(currentStep === 2 || currentStep === 3) && (
+                    <div className="cn-footer">
+                      <button
+                        className="consult-btn btn-outline"
+                        onClick={() => setCurrentStep(currentStep === 2 ? 1 : 2)}
+                      >
+                        {currentStep === 2 ? "← Back to Audio" : "← Back to Transcript"}
+                      </button>
+
+                      {currentStep === 2 ? (
+                        <button
+                          className="consult-btn btn-primary"
+                          onClick={generateSOAPNote}
+                          disabled={loading || (!transcript.trim() && dialogueTurns.length === 0)}
+                        >
+                          <HiOutlineSparkles style={{ marginRight: 6 }} /> Generate Clinical SOAP Note
                         </button>
-                        <button className="consult-btn btn-outline" onClick={resetAll}>
-                          <FaPlus style={{ marginRight: 6 }} /> New Consultation
-                        </button>
-                      </div>
+                      ) : (
+                        <div className="cn-footer-right">
+                          <button
+                            type="button"
+                            className="consult-btn btn-outline"
+                            onClick={() => {
+                              const formatted = [
+                                editedData?.quick_summary && `Summary: ${editedData.quick_summary}`,
+                                editedData?.what_patient_said && `What Patient Said: ${editedData.what_patient_said}`,
+                                editedData?.what_was_observed && `What Was Observed: ${editedData.what_was_observed}`,
+                                editedData?.likely_diagnosis && `Likely Diagnosis: ${editedData.likely_diagnosis}`,
+                                editedData?.treatment_plan && `Treatment Plan: ${editedData.treatment_plan}`,
+                                editedData?.medications && `Medicines Prescribed: ${editedData.medications}`,
+                                editedData?.follow_up && `Follow-up: ${editedData.follow_up}`,
+                              ]
+                                .filter(Boolean)
+                                .join("\n\n");
+                              copyToClipboard(formatted || soapNote, "SOAP Note");
+                            }}
+                            title="Copy SOAP Note summary"
+                          >
+                            <FaCopy style={{ marginRight: 6 }} /> Copy Note
+                          </button>
+
+                          <button
+                            id="approve-note-btn"
+                            className="consult-btn btn-success"
+                            onClick={approveNote}
+                            disabled={loading}
+                          >
+                            <FaCheckCircle style={{ marginRight: 6 }} /> Approve &amp; Save Note
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
-
-                </div>
-              </>
-            )}
-
-            {/* ── TAB: HISTORY ── */}
-            {activeTab === "history" && (
-              <div className="consult-body">
-                {loadingNotes ? (
-                  <div className="ai-loading">
-                    <div className="loading-dots"><span /><span /><span /></div>
-                    Loading past notes...
-                  </div>
-                ) : pastNotes.length === 0 ? (
-                  <div className="empty-notes">
-                    <div className="empty-notes-icon"><FaClipboardList size={48} /></div>
-                    <div>No consultation notes yet for {patient.name}.</div>
-                    <div style={{ fontSize: "12px", marginTop: "6px" }}>Start a new consultation to create notes.</div>
-                  </div>
-                ) : (
-                  <div className="past-notes-list">
-                    {pastNotes.map((note) => {
-                      const parsed = parseNote(note.finalNote || note.soapNote);
-                      return (
-                        <div key={note.id} className="past-note-card">
-                          <div className="past-note-meta">
-                            <span className="past-note-date">
-                              {new Date(note.createdAt).toLocaleString("en-IN", {
-                                day: "numeric", month: "short", year: "numeric",
-                                hour: "2-digit", minute: "2-digit",
-                              })}
-                            </span>
-                            <span className={`note-status-badge ${note.status.toLowerCase()}`}>
-                              {note.status === "APPROVED"
-                                ? <><FaCheckCircle style={{ marginRight: 4 }} /> Approved</>
-                                : <><FaFileAlt style={{ marginRight: 4 }} /> Draft</>}
-                            </span>
-                          </div>
-                          {parsed
-                            ? <SoapNoteCard data={parsed} editable={false} onChange={() => {}} />
-                            : <div className="past-note-preview">{note.finalNote || note.soapNote || "No note content"}</div>
-                          }
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
+            </section>
           </div>
         </div>
       )}

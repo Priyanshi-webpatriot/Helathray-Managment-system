@@ -1,1 +1,508 @@
-/* Styles moved centrally to src/index.css */
+/* ==========================================================================
+   APPOINTMENTS PAGE – Clean, User-Friendly Design (Doctor/Admin Side)
+   ========================================================================== */
+
+.appt-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px 60px;
+  font-family: inherit;
+  color: #0f172a;
+}
+
+/* ── PAGE HEADER ── */
+.appt-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+
+.appt-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.appt-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+}
+
+.appt-back-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.appt-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.appt-eyebrow {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #0284c7;
+}
+
+.appt-page-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.appt-page-badge {
+  padding: 6px 14px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #475569;
+}
+
+/* ── BOOKING FORM CARD ── */
+.appt-form-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 28px 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+
+.appt-form-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.appt-form-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: #eff6ff;
+  color: #0284c7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+.appt-form-card-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.appt-form-card-sub {
+  font-size: 13px;
+  color: #64748b;
+  margin: 2px 0 0;
+}
+
+.appt-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.appt-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.appt-form-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.appt-form-label svg {
+  color: #0284c7;
+  font-size: 13px;
+}
+
+.appt-form-input,
+.appt-form-select {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 11px;
+  font-size: 13.5px;
+  color: #0f172a;
+  background: #ffffff;
+  outline: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+  appearance: auto;
+}
+
+.appt-form-input:focus,
+.appt-form-select:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+}
+
+.appt-form-input:hover,
+.appt-form-select:hover {
+  border-color: #94a3b8;
+}
+
+.appt-field-error {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.appt-form-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.appt-book-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 28px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.28);
+  transition: all 0.18s ease;
+}
+
+.appt-book-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(2, 132, 199, 0.4);
+}
+
+/* ── APPOINTMENTS LIST CARD ── */
+.appt-list-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+
+.appt-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #f8fafc;
+}
+
+.appt-list-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.appt-list-count {
+  padding: 3px 10px;
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ── EMPTY STATE ── */
+.appt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 24px;
+  gap: 10px;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.appt-empty-icon {
+  font-size: 36px;
+  opacity: 0.5;
+  margin-bottom: 4px;
+}
+
+.appt-empty-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #475569;
+  margin: 0;
+}
+
+.appt-empty-desc {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* ── TABLE ── */
+.appt-table-wrap {
+  overflow-x: auto;
+}
+
+.appt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.appt-table thead tr {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.appt-table thead th {
+  padding: 13px 20px;
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.appt-table tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.12s ease;
+}
+
+.appt-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.appt-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.appt-table td {
+  padding: 14px 20px;
+  vertical-align: middle;
+  color: #334155;
+}
+
+.appt-cell-primary {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.appt-cell-secondary {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.appt-cell-muted {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+/* Patient avatar */
+.appt-patient-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.appt-patient-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.appt-doctor-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.appt-doctor-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.appt-spec-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #f0f9ff;
+  color: #0284c7;
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 1px solid #bae6fd;
+  margin-top: 3px;
+}
+
+/* Date / Time cells */
+.appt-date-cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #334155;
+  font-weight: 600;
+}
+
+.appt-date-cell svg {
+  color: #0284c7;
+  flex-shrink: 0;
+}
+
+/* Status badge */
+.appt-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  white-space: nowrap;
+}
+
+.appt-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+/* ── PAGINATION ── */
+.appt-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px 24px;
+  border-top: 1px solid #f1f5f9;
+  background: #fafafa;
+}
+
+.appt-page-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.appt-page-btn:hover:not(:disabled) {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+  color: #0284c7;
+}
+
+.appt-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.appt-page-info {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  padding: 8px 14px;
+  background: #f1f5f9;
+  border-radius: 999px;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .appt-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .appt-form-card {
+    padding: 20px;
+  }
+
+  .appt-page-title {
+    font-size: 20px;
+  }
+
+  .appt-table thead th,
+  .appt-table td {
+    padding: 11px 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .appt-page {
+    padding: 20px 14px 48px;
+  }
+}

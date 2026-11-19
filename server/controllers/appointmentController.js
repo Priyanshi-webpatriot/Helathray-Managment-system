@@ -1,18 +1,64 @@
 import prisma from "../prisma/client.js";
+import { processReminders } from "../utils/reminderCron.js";
+import { validateAppointmentDateTime, normalizeTimeTo24Hour } from "../utils/dateTimeValidator.js";
 
 // BOOK APPOINTMENT
 export const createAppointment = async (req, res) => {
   try {
     const { patientId, doctorId, date, time } = req.body;
+
+    // Validate that appointment date/time is not in the past
+    const check = validateAppointmentDateTime(date, time);
+    if (!check.valid) {
+      return res.status(400).json({ error: check.error });
+    }
+
+    const normalizedTime = normalizeTimeTo24Hour(time);
+
+    const dayStart = new Date(date);
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const dayEnd = new Date(date);
+    dayEnd.setUTCHours(23, 59, 59, 999);
+
+    // Check if slot is already booked for this doctor on that date
+    if (normalizedTime || time) {
+      const slotTaken = await prisma.appointment.findFirst({
+        where: {
+          doctorId: Number(doctorId),
+          OR: [
+            { date: new Date(date) },
+            { date: { gte: dayStart, lte: dayEnd } },
+          ],
+          AND: [
+            {
+              OR: [
+                { time: normalizedTime },
+                { time: time },
+              ],
+            },
+          ],
+        },
+      });
+
+      if (slotTaken) {
+        return res.status(409).json({
+          error: "This time slot is already booked for this doctor. Please choose a different date or time.",
+        });
+      }
+    }
+
     const appointment = await prisma.appointment.create({
       data: {
         patientId: Number(patientId),
         doctorId: Number(doctorId),
         date: new Date(date),
-        time: time || null,
+        time: normalizedTime || time || null,
       },
     });
     res.status(201).json(appointment);
+
+    // Process reminders immediately so patient and doctor don't wait for next cron tick
+    processReminders().catch((e) => console.error("Immediate reminder trigger error:", e.message));
   } catch (error) {
     console.log(error);
     res.status(500).json({ error: "Failed to create appointment" });

@@ -1,5 +1,6 @@
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import "../styles/layout.css";
+import { BsHospital } from "react-icons/bs";
 
 export default function Layout() {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -15,7 +16,9 @@ export default function Layout() {
 
       {/* SIDEBAR */}
       <div className="sidebar">
-        <h2>🏥 Health System</h2>
+        <h2 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <BsHospital /> Health System
+        </h2>
 
         <div className="menu">
           <Link to="/dashboard">Dashboard</Link>

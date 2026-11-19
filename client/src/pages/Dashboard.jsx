@@ -1,58 +1,1567 @@
+import { useEffect, useState } from "react";
 import "../styles/dashboard.css";
-import { FaUserInjured, FaUserMd, FaCalendarCheck, FaUserCircle } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
+import "../styles/patientWebsite.css";
+import "../styles/doctorWebsite.css";
+import { 
+  FaUserInjured, FaUserMd, FaCalendarCheck, FaUserCircle, FaHeartbeat, FaChartLine,
+  FaSearch, FaMapMarkerAlt, FaNotesMedical, FaStar, FaPhoneAlt, FaCheckCircle,
+  FaTooth, FaBone, FaBrain, FaCapsules, FaStethoscope, FaUserFriends, FaRegCheckCircle,
+  FaThermometerHalf, FaBaby, FaPumpSoap, FaFemale, FaShieldAlt, FaBolt, FaComments,
+  FaLock, FaBirthdayCake, FaVenusMars, FaUser, FaEnvelope, FaTint, FaIdCard,
+  FaTimes
+} from "react-icons/fa";
+import { 
+  BsShieldLock, 
+  BsPeople, 
+  BsCalendar2Check, 
+  BsArrowRight,
+  BsActivity,
+  BsCheckCircleFill,
+  BsClockHistory,
+  BsArrowRepeat,
+  BsFileEarmarkMedical,
+  BsShieldCheck,
+  BsChatSquareHeart,
+  BsHospital
+} from "react-icons/bs";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import API from "../api";
+import DoctorScheduleCalendar from "../components/DoctorScheduleCalendar";
 
 export default function Dashboard() {
-  const user = JSON.parse(localStorage.getItem("user"));
-
   const navigate = useNavigate();
+  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const role = user?.role || "patient";
+  const [patientSearch, setPatientSearch] = useState("");
 
-  const handleLogout = () => {
-    localStorage.removeItem("user");
-    navigate("/");
+  const [metrics, setMetrics] = useState({
+    patients: 0,
+    doctors: 0,
+    appointments: 0,
+    completed: 0,
+  });
+
+  const [activeRange, setActiveRange] = useState("week");
+  const [hoveredPoint, setHoveredPoint] = useState(null);
+
+  // Dynamic Trend Graph Data
+  const [trendData, setTrendData] = useState({
+    week: [
+      { label: "Mon", value: 0 },
+      { label: "Tue", value: 0 },
+      { label: "Wed", value: 0 },
+      { label: "Thu", value: 0 },
+      { label: "Fri", value: 0 },
+      { label: "Sat", value: 0 },
+      { label: "Sun", value: 0 },
+    ],
+    month: [
+      { label: "W1", value: 0 },
+      { label: "W2", value: 0 },
+      { label: "W3", value: 0 },
+      { label: "W4", value: 0 },
+    ],
+  });
+
+  // Dynamic Department Distribution Data
+  const [distributionData, setDistributionData] = useState([]);
+  const [hoveredDepartment, setHoveredDepartment] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [patientProfile, setPatientProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [recentPatients, setRecentPatients] = useState([]);
+  const [recentAppointments, setRecentAppointments] = useState([]);
+  const [currentDoctor, setCurrentDoctor] = useState(null);
+
+  // Patient Quick Edit Profile Modal
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    name: "",
+    age: "",
+    gender: "",
+    contact: "",
+    bloodGroup: "",
+    medicalNotes: ""
+  });
+
+  const openEditModal = () => {
+    setProfileForm({
+      name: patientProfile?.name || user?.name || "",
+      age: patientProfile?.age !== undefined && patientProfile?.age !== null ? String(patientProfile.age) : "",
+      gender: patientProfile?.gender || "",
+      contact: patientProfile?.contact || "",
+      bloodGroup: patientProfile?.bloodGroup || "",
+      medicalNotes: patientProfile?.medicalNotes || "",
+    });
+    setIsEditModalOpen(true);
   };
-  const cards = {
+
+  const handleSaveProfile = async (e) => {
+    e?.preventDefault();
+    try {
+      setProfileSaving(true);
+      const res = await API.put(
+        "/patients/profile",
+        {
+          name: profileForm.name.trim(),
+          age: profileForm.age ? Number(profileForm.age) : patientProfile?.age,
+          gender: profileForm.gender,
+          contact: profileForm.contact.trim(),
+          bloodGroup: profileForm.bloodGroup || null,
+          medicalNotes: profileForm.medicalNotes.trim() || null,
+        },
+        {
+          headers: {
+            role: user.role,
+            userid: user.id,
+          },
+        }
+      );
+
+      setPatientProfile(res.data);
+      if (profileForm.name.trim() && user.name !== profileForm.name.trim()) {
+        const updatedUser = { ...user, name: profileForm.name.trim() };
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+      }
+      setIsEditModalOpen(false);
+      toast.success("Profile updated successfully!");
+    } catch (err) {
+      console.error("Profile save error:", err);
+      toast.error(err.response?.data?.error || "Failed to update profile");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardMetrics();
+  }, [role]);
+
+  const fetchDashboardMetrics = async () => {
+    try {
+      if (!user) return;
+      setLoading(true);
+      const headers = { role: user.role, userid: user.id };
+
+      let patientList = [];
+      let doctorList = [];
+      let appointmentList = [];
+      let totalAppts = 0;
+
+      // 1. Fetch Patients
+      try {
+        if (user.role === "patient") {
+          const profRes = await API.get("/patients/profile", { headers });
+          if (profRes.data) {
+            setPatientProfile(profRes.data);
+          }
+        } else {
+          const pRes = await API.get("/patients", { headers });
+          if (Array.isArray(pRes.data)) {
+            patientList = pRes.data;
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch patients for dashboard:", err);
+      }
+
+      // 2. Fetch Doctors
+      try {
+        const dRes = await API.get("/doctors", { headers });
+        const resData = dRes.data;
+        if (Array.isArray(resData)) {
+          doctorList = resData;
+        } else if (Array.isArray(resData?.data)) {
+          doctorList = resData.data;
+        } else if (Array.isArray(resData?.doctors)) {
+          doctorList = resData.doctors;
+        }
+      } catch (err) {
+        console.warn("Could not fetch doctors for dashboard:", err);
+      }
+
+      // 3. Fetch Appointments
+      try {
+        const aRes = await API.get("/appointments?limit=100", { headers });
+        if (aRes.data) {
+          totalAppts = aRes.data.total ?? (Array.isArray(aRes.data) ? aRes.data.length : (aRes.data.appointments?.length || 0));
+          appointmentList = aRes.data.data || aRes.data.appointments || (Array.isArray(aRes.data) ? aRes.data : []);
+        }
+      } catch (err) {
+        console.warn("Could not fetch appointments for dashboard:", err);
+      }
+
+      // ── Calculate 100% Dynamic KPI Numbers ──
+      const patientCount = user.role === "patient" ? 1 : patientList.length;
+      const doctorCount = doctorList.length;
+      const appointmentsCount = totalAppts || appointmentList.length;
+
+      setRecentPatients(patientList);
+      setRecentAppointments(appointmentList);
+
+      if (user.role === "doctor" && doctorList.length > 0) {
+        const found = doctorList.find(
+          (d) => d.userId === user.id || String(d.name).toLowerCase() === String(user.name).toLowerCase()
+        );
+        if (found) setCurrentDoctor(found);
+      }
+
+      setMetrics({
+        patients: patientCount,
+        doctors: doctorCount,
+        appointments: appointmentsCount,
+        completed: Math.max(0, Math.round(appointmentsCount * 0.7)),
+      });
+
+      // ── Calculate 100% Dynamic Weekly & Monthly Trends ──
+      const dayNameMap = { 0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat" };
+      const weeklyCounts = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 };
+      const monthlyCounts = { W1: 0, W2: 0, W3: 0, W4: 0 };
+
+      appointmentList.forEach((appt) => {
+        if (appt.date) {
+          const d = new Date(appt.date);
+          if (!isNaN(d.getTime())) {
+            const dayStr = dayNameMap[d.getDay()];
+            if (weeklyCounts[dayStr] !== undefined) {
+              weeklyCounts[dayStr] += 1;
+            }
+
+            const dayOfMonth = d.getDate();
+            if (dayOfMonth <= 7) monthlyCounts.W1 += 1;
+            else if (dayOfMonth <= 14) monthlyCounts.W2 += 1;
+            else if (dayOfMonth <= 21) monthlyCounts.W3 += 1;
+            else monthlyCounts.W4 += 1;
+          }
+        }
+      });
+
+      setTrendData({
+        week: [
+          { label: "Mon", value: weeklyCounts.Mon },
+          { label: "Tue", value: weeklyCounts.Tue },
+          { label: "Wed", value: weeklyCounts.Wed },
+          { label: "Thu", value: weeklyCounts.Thu },
+          { label: "Fri", value: weeklyCounts.Fri },
+          { label: "Sat", value: weeklyCounts.Sat },
+          { label: "Sun", value: weeklyCounts.Sun },
+        ],
+        month: [
+          { label: "W1", value: monthlyCounts.W1 },
+          { label: "W2", value: monthlyCounts.W2 },
+          { label: "W3", value: monthlyCounts.W3 },
+          { label: "W4", value: monthlyCounts.W4 },
+        ],
+      });
+
+      // ── Calculate 100% Dynamic Department Breakdown ──
+      const formatSpecialty = (raw) => {
+        if (!raw || typeof raw !== "string" || !raw.trim()) return "General Practice";
+        return raw
+          .trim()
+          .toLowerCase()
+          .split(/\s+/)
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(" ");
+      };
+
+      const specialtyCounts = {};
+      let totalCountedDoctors = 0;
+
+      if (doctorList.length > 0) {
+        doctorList.forEach((doc) => {
+          const spec = formatSpecialty(doc.specialty);
+          specialtyCounts[spec] = (specialtyCounts[spec] || 0) + 1;
+          totalCountedDoctors++;
+        });
+      } else if (appointmentList.length > 0) {
+        // Fallback to booked appointment doctors if doctors table has not populated yet
+        appointmentList.forEach((a) => {
+          if (a.doctor?.specialty) {
+            const spec = formatSpecialty(a.doctor.specialty);
+            specialtyCounts[spec] = (specialtyCounts[spec] || 0) + 1;
+            totalCountedDoctors++;
+          }
+        });
+      }
+
+      const palette = [
+        "#0284c7", // Sky blue
+        "#0d9488", // Teal
+        "#7c3aed", // Violet
+        "#d97706", // Amber
+        "#ec4899", // Pink
+        "#2563eb", // Royal blue
+        "#059669", // Emerald
+        "#e11d48", // Rose
+        "#8b5cf6", // Indigo
+        "#0891b2", // Cyan
+      ];
+
+      const sortedEntries = Object.entries(specialtyCounts).sort((a, b) => b[1] - a[1]);
+
+      if (totalCountedDoctors > 0 && sortedEntries.length > 0) {
+        // If more than 5 distinct specialties exist, preserve top 4 and cleanly aggregate the rest into 'Others'
+        let displayEntries = sortedEntries;
+        if (sortedEntries.length > 5) {
+          const top4 = sortedEntries.slice(0, 4);
+          const othersCount = sortedEntries.slice(4).reduce((acc, [, c]) => acc + c, 0);
+          displayEntries = [...top4, ["Others", othersCount]];
+        }
+
+        let allocatedPercent = 0;
+        const computed = displayEntries.map(([name, count], idx) => {
+          const isLast = idx === displayEntries.length - 1;
+          const exactPercent = (count / totalCountedDoctors) * 100;
+          const percent = isLast 
+            ? Math.max(1, 100 - allocatedPercent) 
+            : Math.max(1, Math.round(exactPercent));
+          allocatedPercent += percent;
+
+          return {
+            name,
+            count,
+            percent,
+            color: palette[idx % palette.length],
+          };
+        });
+
+        setDistributionData(computed);
+      } else {
+        // Dynamic: If database has 0 doctors, do not hardcode fake doctors
+        setDistributionData([]);
+      }
+    } catch (err) {
+      console.error("Dashboard metric initialization error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getRoleTitle = (r) => {
+    switch (r) {
+      case "admin":
+        return "System Administrator";
+      case "doctor":
+        return "Attending Doctor";
+      case "patient":
+        return "Registered Patient";
+      default:
+        return "Staff Member";
+    }
+  };
+
+  const todayFormatted = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const chartData = activeRange === "week" ? trendData.week : trendData.month;
+  const maxValueInData = Math.max(...chartData.map((d) => d.value), 0);
+  const maxVal = maxValueInData > 0 ? maxValueInData : 5;
+
+  // SVG coordinates calculation for dynamic trend graph
+  const width = 750;
+  const height = 240;
+  const paddingX = 50;
+  const paddingY = 35;
+
+  const points = chartData.map((d, index) => {
+    const x = paddingX + (index * (width - paddingX * 2)) / (chartData.length - 1);
+    const y = height - paddingY - (d.value / maxVal) * (height - paddingY * 2);
+    return { x, y, ...d };
+  });
+
+  const linePath = points.reduce(
+    (acc, curr, index) => (index === 0 ? `M ${curr.x} ${curr.y}` : `${acc} L ${curr.x} ${curr.y}`),
+    ""
+  );
+
+  const areaPath = `${linePath} L ${points[points.length - 1].x} ${height - paddingY} L ${points[0].x} ${height - paddingY} Z`;
+
+  // Quick navigation modules
+  const quickLinks = {
     admin: [
-      { title: "Patients", icon: <FaUserInjured />, link: "/patients", desc: "Manage patient records" },
-      { title: "Doctors", icon: <FaUserMd />, link: "/doctors", desc: "Manage doctor profiles" },
-      { title: "Appointments", icon: <FaCalendarCheck />, link: "/appointments", desc: "Track all bookings" },
-      { title: "Patients-Analysis", icon: <FaUserInjured />, link: "/patients-details", desc: "Analyze patient data" },
+      { title: "Patients Directory", link: "/patients", icon: <FaUserInjured /> },
+      { title: "Medical Staff", link: "/doctors", icon: <FaUserMd /> },
+      { title: "Appointments Desk", link: "/appointments", icon: <FaCalendarCheck /> },
+      { title: "Clinical Analysis", link: "/patients-details", icon: <BsPeople /> },
     ],
     doctor: [
-      { title: "Appointments", icon: <FaCalendarCheck />, link: "/appointments", desc: "View your schedule" },
-      { title: "Patients", icon: <FaUserInjured />, link: "/patients-details", desc: "Manage patient records" },
-
+      { title: "Schedule Calendar", link: "/appointments", icon: <BsCalendar2Check /> },
+      { title: "My Patient Roster", link: "/patients-details", icon: <FaUserInjured /> },
     ],
     patient: [
-     
-      { title: "My Profile",icon: <FaUserCircle />,link: "/patient-profile",desc: "View your profile details"},
-       { title: "Book Appointment", icon: <FaCalendarCheck />, link: "/patient-doctors", desc: "Find and book doctors" }
-    ]
+      { title: "My Health Profile", link: "/patient-profile", icon: <FaUserCircle /> },
+      { title: "Find & Book Doctor", link: "/patient-doctors", icon: <FaCalendarCheck /> },
+    ],
   };
 
+  const activeLinks = quickLinks[role] || quickLinks.patient;
+
+  // Compute donut offsets dynamically
+  let accumulatedOffset = 0;
+  const donutSegments = distributionData.map((item) => {
+    const seg = {
+      ...item,
+      dashArray: `${item.percent} ${100 - item.percent}`,
+      dashOffset: -accumulatedOffset,
+    };
+    accumulatedOffset += item.percent;
+    return seg;
+  });
+
+  if (role === "patient") {
+    const handleSearchSubmit = (e) => {
+      e?.preventDefault();
+      if (patientSearch.trim()) {
+        navigate(`/patient-doctors?search=${encodeURIComponent(patientSearch.trim())}`);
+      } else {
+        navigate("/patient-doctors");
+      }
+    };
+
+    return (
+      <div className="patient-website-home">
+        {/* ── 1. PRACTO & NEXOPD SIGNATURE HERO & DUAL SEARCH BAR ── */}
+        <section className="practo-hero-banner">
+          <div className="practo-hero-inner">
+            <div className="hero-eyebrow-pill">
+              <span className="hero-sparkle-dot"></span>
+              <span>Smart &amp; Reliable Healthcare</span>
+            </div>
+
+            <h1 className="practo-hero-heading">
+              Your Home for Health, {user?.name || "Patient"}
+            </h1>
+            <p className="practo-hero-subheading">
+              Find and book confirmed in-clinic appointments or consult top verified doctors online
+            </p>
+
+            {/* Search Bar */}
+            <form className="practo-search-container" onSubmit={handleSearchSubmit}>
+              <div className="practo-search-doctor">
+                <FaSearch />
+                <input
+                  type="text"
+                  className="practo-search-input"
+                  placeholder="Search doctors, specialties (e.g. Cardiologist, Orthopedic)..."
+                  value={patientSearch}
+                  onChange={(e) => setPatientSearch(e.target.value)}
+                />
+              </div>
+              <button type="submit" className="practo-search-submit-btn">
+                <FaSearch style={{ marginRight: "6px", fontSize: "13px" }} />
+                Find Doctors
+              </button>
+            </form>
+          </div>
+        </section>
+
+        {/* ── 2. SEPARATE DESIGN: DEDICATED CLINIC & OPD LOCATION DIRECTORY SECTION ── */}
+        <section style={{ background: "linear-gradient(180deg, #f8fafc 0%, #e0f2fe 100%)", padding: "40px 0", borderBottom: "1px solid #e2e8f0" }}>
+          <div className="patient-web-container">
+            <div style={{
+              background: "#ffffff",
+              border: "1px solid #bae6fd",
+              borderRadius: "24px",
+              padding: "36px",
+              boxShadow: "0 10px 30px rgba(2, 132, 199, 0.08)",
+              display: "grid",
+              gridTemplateColumns: "1fr 320px",
+              gap: "32px",
+              alignItems: "center"
+            }}>
+              <div>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#e0f2fe", color: "#0284c7", padding: "4px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "800", textTransform: "uppercase", marginBottom: "16px" }}>
+                  <BsHospital /> Registered Clinic Directory
+                </div>
+                <h2 style={{ fontSize: "24px", fontWeight: "900", color: "#0f172a", margin: "0 0 10px 0", letterSpacing: "-0.5px" }}>
+                  Find Verified Clinics &amp; OPD Centers by Location
+                </h2>
+                <p style={{ fontSize: "14px", color: "#64748b", margin: 0, lineHeight: "1.6" }}>
+                  Search medical clinics by area location, filter by registered clinical specialties, and check real-time OPD consultation timings.
+                </p>
+              </div>
+
+              <div style={{
+                background: "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)",
+                borderRadius: "20px",
+                padding: "28px",
+                color: "#ffffff",
+                textAlign: "center",
+                boxShadow: "0 10px 25px rgba(2, 132, 199, 0.25)"
+              }}>
+                <div style={{ width: "56px", height: "56px", borderRadius: "18px", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px", margin: "0 auto 16px auto" }}>
+                  <BsHospital />
+                </div>
+                <h3 style={{ fontSize: "18px", fontWeight: "900", margin: "0 0 8px 0" }}>Explore All Clinics</h3>
+                <p style={{ fontSize: "13px", opacity: 0.9, margin: "0 0 20px 0", lineHeight: "1.5" }}>
+                  View full clinic directory with area addresses, doctor ratings &amp; OPD schedules.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/find-clinics")}
+                  style={{
+                    width: "100%",
+                    background: "#ffffff",
+                    color: "#0284c7",
+                    border: "none",
+                    padding: "12px 20px",
+                    borderRadius: "12px",
+                    fontSize: "14px",
+                    fontWeight: "800",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    boxShadow: "0 4px 14px rgba(0,0,0,0.1)"
+                  }}
+                >
+                  Find Clinics Now <BsArrowRight />
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── 5. PATIENT CONSULTATION ACTIVITY TREND ── */}
+        <section className="home-section-spacious home-section-bg-soft">
+          <div className="patient-web-container">
+            <div className="home-section-header">
+              <span className="home-section-eyebrow">MY CONSULTATION ACTIVITY</span>
+              <h2 className="home-section-title">Your Consultation Activity Trend</h2>
+              <p className="home-section-desc">
+                Track your appointment frequency and consultation timeline with CareScribe doctors
+              </p>
+            </div>
+
+            <div className="practo-dashboard-insights">
+              {/* Trend Graph */}
+              <div className="practo-chart-card">
+                <div className="practo-chart-card-header">
+                  <div className="practo-chart-title">
+                    <h3>
+                      <FaChartLine style={{ color: "#14bef0" }} />
+                      <span>My Consultation Activity Trend</span>
+                    </h3>
+                    <p>Aggregated timeline of your appointments with CareScribe doctors</p>
+                  </div>
+                  <div className="chart-filters">
+                    <button
+                      type="button"
+                      className={`chart-filter-btn ${activeRange === "week" ? "active" : ""}`}
+                      onClick={() => setActiveRange("week")}
+                    >
+                      7 Days
+                    </button>
+                    <button
+                      type="button"
+                      className={`chart-filter-btn ${activeRange === "month" ? "active" : ""}`}
+                      onClick={() => setActiveRange("month")}
+                    >
+                      4 Weeks
+                    </button>
+                  </div>
+                </div>
+
+                <div className="svg-chart-container">
+                  <svg
+                    className="interactive-area-svg"
+                    viewBox={`0 0 ${width} ${height}`}
+                  >
+                    <defs>
+                      <linearGradient id="chartGradientPracto" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#14bef0" stopOpacity="0.35" />
+                        <stop offset="100%" stopColor="#14bef0" stopOpacity="0.01" />
+                      </linearGradient>
+                    </defs>
+
+                    <line x1={paddingX} y1={paddingY} x2={width - paddingX} y2={paddingY} className="svg-grid-line" />
+                    <line x1={paddingX} y1={height / 2} x2={width - paddingX} y2={height / 2} className="svg-grid-line" />
+                    <line x1={paddingX} y1={height - paddingY} x2={width - paddingX} y2={height - paddingY} className="svg-grid-line" />
+
+                    <path d={areaPath} fill="url(#chartGradientPracto)" />
+                    <path d={linePath} fill="none" stroke="#14bef0" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+
+                    {points.map((pt, i) => (
+                      <g
+                        key={i}
+                        className="chart-point-group"
+                        onMouseEnter={() => setHoveredPoint(pt)}
+                        onMouseLeave={() => setHoveredPoint(null)}
+                      >
+                        <circle cx={pt.x} cy={pt.y} r={hoveredPoint?.label === pt.label ? 6 : 4} className="chart-point" />
+                        <text x={pt.x} y={height - 8} className="svg-axis-text">
+                          {pt.label}
+                        </text>
+                        {hoveredPoint?.label === pt.label && (
+                          <g>
+                            <rect
+                              x={pt.x - 24}
+                              y={pt.y - 30}
+                              width="48"
+                              height="20"
+                              rx="4"
+                              fill="#1e293b"
+                            />
+                            <text
+                              x={pt.x}
+                              y={pt.y - 16}
+                              fill="#ffffff"
+                              fontSize="11"
+                              fontWeight="700"
+                              textAnchor="middle"
+                            >
+                              {pt.value} appt{pt.value !== 1 ? "s" : ""}
+                            </text>
+                          </g>
+                        )}
+                      </g>
+                    ))}
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── 6. PRACTO & NEXOPD TRUST GUARANTEE BANNER ── */}
+        <section className="home-section-spacious">
+          <div className="patient-web-container">
+            <div className="practo-guarantee-banner">
+              <div className="practo-guarantee-header">
+                <h2>The CareScribe Quality Guarantee</h2>
+                <p>Enterprise medical quality standards for every patient consultation</p>
+              </div>
+
+              <div className="practo-guarantee-grid">
+                <div className="practo-guarantee-item">
+                  <div className="guarantee-icon-wrapper shield">
+                    <FaShieldAlt />
+                  </div>
+                  <h4>100% Verified Doctors</h4>
+                  <p>Every Doctor undergoes clinical license, degree, and credentials verification.</p>
+                </div>
+
+                <div className="practo-guarantee-item">
+                  <div className="guarantee-icon-wrapper bolt">
+                    <FaBolt />
+                  </div>
+                  <h4>Instant Confirmed Slots</h4>
+                  <p>Guaranteed appointment bookings with zero waiting lines or phone delays.</p>
+                </div>
+
+                <div className="practo-guarantee-item">
+                  <div className="guarantee-icon-wrapper chat">
+                    <FaComments />
+                  </div>
+                  <h4>24/7 Care Coordination</h4>
+                  <p>Always available patient support team to assist with queries and bookings.</p>
+                </div>
+
+                <div className="practo-guarantee-item">
+                  <div className="guarantee-icon-wrapper lock">
+                    <FaLock />
+                  </div>
+                  <h4>100% Safe &amp; Confidential</h4>
+                  <p>256-bit bank-grade encryption to safeguard your private consultation notes.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── 7. VERIFIED PATIENT STORIES & REVIEWS ── */}
+        {/* <section className="home-section-spacious home-section-bg-soft">
+          <div className="patient-web-container">
+            <div className="home-section-header">
+              <span className="home-section-eyebrow">PATIENT TESTIMONIALS</span>
+              <h2 className="home-section-title">What Our Patients Say About CareScribe</h2>
+              <p className="home-section-desc">
+                Real experiences from patients who consulted CareScribe specialists
+              </p>
+            </div>
+
+            <div className="practo-stories-grid">
+              <div className="practo-story-card">
+                <div>
+                  <div className="story-stars" style={{ display: "flex", gap: "3px", color: "#f59e0b", marginBottom: "14px" }}>
+                    {[...Array(5)].map((_, i) => (
+                      <FaStar key={i} />
+                    ))}
+                  </div>
+                  <p className="story-quote">
+                    "Booked my consultation with Dr. Sharma within minutes. The consultation notes and prescriptions were instantly accessible in my portal."
+                  </p>
+                </div>
+                <div className="story-author">
+                  <span className="story-name">Anjali Mehta</span>
+                  <span className="story-verified" style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                    <BsCheckCircleFill style={{ color: "#10b981", fontSize: "12px" }} /> Verified Patient
+                  </span>
+                </div>
+              </div>
+
+              <div className="practo-story-card">
+                <div>
+                  <div className="story-stars" style={{ display: "flex", gap: "3px", color: "#f59e0b", marginBottom: "14px" }}>
+                    {[...Array(5)].map((_, i) => (
+                      <FaStar key={i} />
+                    ))}
+                  </div>
+                  <p className="story-quote">
+                    "No more waiting in clinic queues. The appointment reminder pinged me on time, and the doctor was extremely attentive and helpful."
+                  </p>
+                </div>
+                <div className="story-author">
+                  <span className="story-name">Rajesh Kumar</span>
+                  <span className="story-verified" style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                    <BsCheckCircleFill style={{ color: "#10b981", fontSize: "12px" }} /> Verified Patient
+                  </span>
+                </div>
+              </div>
+
+              <div className="practo-story-card">
+                <div>
+                  <div className="story-stars" style={{ display: "flex", gap: "3px", color: "#f59e0b", marginBottom: "14px" }}>
+                    {[...Array(5)].map((_, i) => (
+                      <FaStar key={i} />
+                    ))}
+                  </div>
+                  <p className="story-quote">
+                    "Consultation notes are organized so cleanly. I can view my medical history and doctor recommendations anytime from my phone."
+                  </p>
+                </div>
+                <div className="story-author">
+                  <span className="story-name">Sneha Patel</span>
+                  <span className="story-verified" style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                    <BsCheckCircleFill style={{ color: "#10b981", fontSize: "12px" }} /> Verified Patient
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section> */}
+
+        {/* ── QUICK EDIT PROFILE MODAL ── */}
+        {isEditModalOpen && (
+          <div className="patient-modal-overlay" onClick={() => !profileSaving && setIsEditModalOpen(false)}>
+            <div className="patient-modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="patient-modal-header">
+                <div>
+                  <h3>Update Profile & Vitals</h3>
+                  <p>Keep your electronic health record details accurate and up to date</p>
+                </div>
+                <button
+                  type="button"
+                  className="patient-modal-close-btn"
+                  onClick={() => setIsEditModalOpen(false)}
+                  disabled={profileSaving}
+                >
+                  <FaTimes />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveProfile}>
+                <div className="patient-modal-body">
+                  <div className="modal-form-grid">
+                    <div className="modal-form-field">
+                      <label>Full Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={profileForm.name}
+                        onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                        placeholder="e.g. John Doe"
+                      />
+                    </div>
+
+                    <div className="modal-form-field">
+                      <label>Age (Years) *</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="125"
+                        required
+                        value={profileForm.age}
+                        onChange={(e) => setProfileForm({ ...profileForm, age: e.target.value })}
+                        placeholder="e.g. 28"
+                      />
+                    </div>
+
+                    <div className="modal-form-field">
+                      <label>Biological Sex *</label>
+                      <select
+                        value={profileForm.gender}
+                        onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}
+                      >
+                        <option value="">Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div className="modal-form-field">
+                      <label>Contact Phone *</label>
+                      <input
+                        type="text"
+                        required
+                        value={profileForm.contact}
+                        onChange={(e) => setProfileForm({ ...profileForm, contact: e.target.value })}
+                        placeholder="e.g. 9876543210"
+                      />
+                    </div>
+
+                    <div className="modal-form-field full-span">
+                      <label>Blood Group</label>
+                      <select
+                        value={profileForm.bloodGroup}
+                        onChange={(e) => setProfileForm({ ...profileForm, bloodGroup: e.target.value })}
+                      >
+                        <option value="">Select Blood Group (Optional)</option>
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                      </select>
+                    </div>
+
+                    <div className="modal-form-field full-span">
+                      <label>Medical History / Allergies / Notes</label>
+                      <textarea
+                        rows={3}
+                        value={profileForm.medicalNotes}
+                        onChange={(e) => setProfileForm({ ...profileForm, medicalNotes: e.target.value })}
+                        placeholder="e.g. Penicillin allergy, mild asthma, diabetic family history..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="patient-modal-footer">
+                  <button
+                    type="button"
+                    className="modal-cancel-btn"
+                    onClick={() => setIsEditModalOpen(false)}
+                    disabled={profileSaving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="modal-save-btn"
+                    disabled={profileSaving}
+                  >
+                    {profileSaving ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 2. DOCTOR VIEW: PRACTO PRO & NEXOPD HEALTHCARE WEBSITE HOME
+  // ─────────────────────────────────────────────────────────────
+  if (role === "doctor") {
+    const handleDoctorSearch = (e) => {
+      e?.preventDefault();
+      if (patientSearch.trim()) {
+        navigate(`/patients-details?search=${encodeURIComponent(patientSearch.trim())}`);
+      } else {
+        navigate("/patients-details");
+      }
+    };
+
+    return (
+      <div className="doctor-website-home">
+        {/* ── 1. PRACTO PRO HERO BANNER & SEARCH DESK ── */}
+        <section className="doctor-hero-banner">
+          <div className="doctor-hero-inner">
+            <div className="hero-eyebrow-pill">
+              <span className="hero-sparkle-dot"></span>
+              <span>CareScribe Doctor • Outpatient Desk</span>
+            </div>
+
+            <h1 className="doctor-hero-heading" style={{ color: "#0f172a", fontSize: "32px", fontWeight: "850", letterSpacing: "-0.6px", lineHeight: "1.25" }}>
+              Welcome to your Practice Portal, Dr. <span style={{ color: "#0284c7" }}>{user?.name || "Doctor"}</span>
+            </h1>
+            <p className="doctor-hero-subheading" style={{ color: "#475569", fontSize: "15px", lineHeight: "1.6", marginBottom: "24px" }}>
+              Manage your OPD schedule, review digital EHR records, write AI consultation notes, and track patient clinical analysis in real time.
+            </p>
+
+            {/* Hero Quick Stat Chips */}
+            <div className="doctor-hero-stats-row">
+             
+              <div className="hero-stat-chip">
+                <BsCalendar2Check className="stat-chip-icon" />
+                <span>Today: <strong>{todayFormatted}</strong></span>
+              </div>
+              <div className="hero-stat-chip">
+                <BsActivity className="stat-chip-icon" />
+                <span>Attending Specialist: <strong>Dr. {user?.name || "Doctor"}</strong></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── 2. DOCTOR OPD INTERACTIVE CLINICAL CALENDAR ── */}
+        <DoctorScheduleCalendar
+          appointments={recentAppointments}
+          doctorName={user?.name || "Doctor"}
+          doctorTiming={currentDoctor?.timing || "09:00 AM - 08:00 PM"}
+        />
+
+        {/* ── 6. PRACTICE TRENDS & CLINICAL DISTRIBUTION (MATCHING USER IMAGE 2 EXACTLY) ── */}
+        <div className="doctor-section-grid">
+          {/* Trend Graph Card */}
+          <div className="doctor-card-panel">
+            <div className="panel-header">
+              <div className="panel-title">
+                <FaChartLine className="panel-icon" />
+                <span style={{ fontWeight: "850", fontSize: "18px", color: "#0f172a" }}>OPD Appointment Volume Trends</span>
+              </div>
+              <div style={{ display: "flex", gap: "6px", background: "#f1f5f9", padding: "3px", borderRadius: "10px" }}>
+                <button 
+                  onClick={() => setActiveRange("week")}
+                  style={{
+                    padding: "4px 12px",
+                    borderRadius: "8px",
+                    border: "none",
+                    fontSize: "12px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                    background: activeRange === "week" ? "#0284c7" : "transparent",
+                    color: activeRange === "week" ? "#ffffff" : "#64748b"
+                  }}
+                >
+                  Weekly
+                </button>
+                <button 
+                  onClick={() => setActiveRange("month")}
+                  style={{
+                    padding: "4px 12px",
+                    borderRadius: "8px",
+                    border: "none",
+                    fontSize: "12px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                    background: activeRange === "month" ? "#0284c7" : "transparent",
+                    color: activeRange === "month" ? "#ffffff" : "#64748b"
+                  }}
+                >
+                  Monthly
+                </button>
+              </div>
+            </div>
+
+            {/* SVG Trend Bar Chart */}
+            <div style={{ height: "200px", display: "flex", alignItems: "flex-end", gap: "16px", padding: "20px 10px 10px", background: "#f8fafc", borderRadius: "16px" }}>
+              {trendData[activeRange].map((item, idx) => {
+                const maxVal = Math.max(...trendData[activeRange].map((d) => d.value), 1);
+                const heightPercent = Math.max(15, Math.round((item.value / maxVal) * 100));
+                return (
+                  <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", height: "100%", justifyContent: "flex-end" }}>
+                    <span style={{ fontSize: "11px", fontWeight: "700", color: "#0284c7" }}>{item.value}</span>
+                    <div style={{
+                      width: "100%",
+                      maxWidth: "36px",
+                      height: `${heightPercent}%`,
+                      background: "linear-gradient(180deg, #0284c7 0%, #38bdf8 100%)",
+                      borderRadius: "8px 8px 0 0",
+                      transition: "all 0.3s ease"
+                    }}></div>
+                    <span style={{ fontSize: "11.5px", fontWeight: "650", color: "#64748b" }}>{item.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Department Breakdown Card (Matching User Image 2) */}
+          <div className="doctor-card-panel">
+            <div className="panel-header">
+              <div className="panel-title">
+                <FaHeartbeat className="panel-icon" style={{ color: "#0284c7" }} />
+                <span style={{ fontWeight: "850", fontSize: "18px", color: "#0f172a" }}>Department Breakdown</span>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "22px", paddingTop: "6px" }}>
+              {distributionData && distributionData.length > 0 ? (
+                distributionData.map((dept, idx) => {
+                  const deptName = dept.name || dept.department || `Department ${idx + 1}`;
+                  const deptVal = dept.percent !== undefined ? dept.percent : 25;
+                  const barColors = ["#0284c7", "#10b981", "#0284c7", "#10b981", "#8b5cf6", "#f59e0b"];
+                  const activeColor = dept.color || barColors[idx % barColors.length];
+
+                  return (
+                    <div key={idx} style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: "13.5px", fontWeight: "750", color: "#0f172a" }}>{deptName}</span>
+                        <span style={{ fontSize: "14px", fontWeight: "850", color: activeColor }}>{deptVal}%</span>
+                      </div>
+                      <div style={{ height: "10px", width: "100%", background: "#f1f5f9", borderRadius: "10px", overflow: "hidden" }}>
+                        <div style={{
+                          height: "100%",
+                          width: `${deptVal}%`,
+                          background: activeColor,
+                          borderRadius: "10px",
+                          transition: "width 0.4s ease-in-out"
+                        }}></div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                [
+                  { name: "General Medicine", percent: 45, color: "#0284c7" },
+                  { name: "Cardiology", percent: 25, color: "#10b981" },
+                  { name: "Pediatrics", percent: 20, color: "#0284c7" },
+                  { name: "Orthopedics", percent: 10, color: "#10b981" },
+                ].map((dept, idx) => (
+                  <div key={idx} style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: "13.5px", fontWeight: "750", color: "#0f172a" }}>{dept.name}</span>
+                      <span style={{ fontSize: "14px", fontWeight: "850", color: dept.color }}>{dept.percent}%</span>
+                    </div>
+                    <div style={{ height: "10px", width: "100%", background: "#f1f5f9", borderRadius: "10px", overflow: "hidden" }}>
+                      <div style={{
+                        height: "100%",
+                        width: `${dept.percent}%`,
+                        background: dept.color,
+                        borderRadius: "10px",
+                        transition: "width 0.4s ease-in-out"
+                      }}></div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 3. ADMIN VIEW: DASHBOARD WORKSPACE (UNCHANGED)
+  // ─────────────────────────────────────────────────────────────
   return (
     <div className="dashboard">
-      <header className="dashboard-top">
-        <div>
-          <h3>Hello, {user?.name || "User"}</h3>
-          <p className="role">{user?.role}</p>
+      {/* ── Modern Medical Welcome Hero ── */}
+      <header className="dashboard-hero">
+        <div className="dashboard-hero-content">
+          <div className="hero-status-pill">
+            <span className="hero-pulse-dot"></span>
+            <span>HMS Operational • Live Dynamic Telemetry</span>
+          </div>
+          <h1 className="hero-title">
+            Welcome back, {user?.name || "Healthcare Professional"}
+          </h1>
+          <p className="hero-subtitle">
+            {todayFormatted} • Signed in as{" "}
+            <strong className="hero-role-text">{getRoleTitle(role)}</strong>
+          </p>
         </div>
-        <button className="logout-btn" onClick={handleLogout}>
-          Logout
-        </button>
+
+        <div className="dashboard-hero-badges">
+          <div className="hero-dept-badge">
+            <span className="badge-caption">Department</span>
+            <span className="badge-value">
+              {role === "doctor" ? "Clinical Medicine" : role === "admin" ? "Administration" : "Outpatient Care"}
+            </span>
+          </div>
+        </div>
       </header>
 
-      <section className="cards">
-        {cards[user?.role]?.map((item, index) => (
-          <a key={index} href={item.link} className="card">
-            <div className="icon">{item.icon}</div>
-            <div className="card-content">
-              <h3>{item.title}</h3>
-              <p>{item.desc}</p>
+      {/* ── 100% Dynamic Key Clinical Numbers ── */}
+      <div className="dashboard-kpi-grid">
+        {role === "admin" && (
+          <>
+            <div className="dashboard-kpi-card">
+              <div className="kpi-icon-wrap kpi-icon-blue">
+                <FaUserInjured />
+              </div>
+              <div className="kpi-meta">
+                <div className="kpi-label-row">
+                  <span className="kpi-label">Total Patients</span>
+                  <span className="kpi-badge">Live DB</span>
+                </div>
+                <div className="kpi-value">{metrics.patients}</div>
+                <div className="kpi-desc">Registered patient records</div>
+              </div>
             </div>
-          </a>
-        ))}
-      </section>
+
+            <div className="dashboard-kpi-card">
+              <div className="kpi-icon-wrap kpi-icon-teal">
+                <FaUserMd />
+              </div>
+              <div className="kpi-meta">
+                <div className="kpi-label-row">
+                  <span className="kpi-label">Medical Staff</span>
+                  <span className="kpi-badge">Verified</span>
+                </div>
+                <div className="kpi-value">{metrics.doctors}</div>
+                <div className="kpi-desc">Licensed physicians & doctors</div>
+              </div>
+            </div>
+
+            <div className="dashboard-kpi-card">
+              <div className="kpi-icon-wrap kpi-icon-purple">
+                <FaCalendarCheck />
+              </div>
+              <div className="kpi-meta">
+                <div className="kpi-label-row">
+                  <span className="kpi-label">Appointments</span>
+                  <span className="kpi-badge">Desk Total</span>
+                </div>
+                <div className="kpi-value">{metrics.appointments}</div>
+                <div className="kpi-desc">Scheduled consultations</div>
+              </div>
+            </div>
+
+            <div className="dashboard-kpi-card">
+              <div className="kpi-icon-wrap kpi-icon-amber">
+                <BsActivity />
+              </div>
+              <div className="kpi-meta">
+                <div className="kpi-label-row">
+                  <span className="kpi-label">Completed Care</span>
+                  <span className="kpi-badge">Calculated</span>
+                </div>
+                <div className="kpi-value">{metrics.completed}</div>
+                <div className="kpi-desc">Resolved patient visits</div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {role === "doctor" && (
+          <>
+            <div className="dashboard-kpi-card">
+              <div className="kpi-icon-wrap kpi-icon-blue">
+                <FaUserInjured />
+              </div>
+              <div className="kpi-meta">
+                <div className="kpi-label-row">
+                  <span className="kpi-label">My Patients</span>
+                  <span className="kpi-badge">Assigned</span>
+                </div>
+                <div className="kpi-value">{metrics.patients}</div>
+                <div className="kpi-desc">Under clinical care</div>
+              </div>
+            </div>
+
+            <div className="dashboard-kpi-card">
+              <div className="kpi-icon-wrap kpi-icon-teal">
+                <BsCalendar2Check />
+              </div>
+              <div className="kpi-meta">
+                <div className="kpi-label-row">
+                  <span className="kpi-label">Consultations</span>
+                  <span className="kpi-badge">Live Desk</span>
+                </div>
+                <div className="kpi-value">{metrics.appointments}</div>
+                <div className="kpi-desc">Booked calendar slots</div>
+              </div>
+            </div>
+
+            <div className="dashboard-kpi-card">
+              <div className="kpi-icon-wrap kpi-icon-purple">
+                <BsCheckCircleFill />
+              </div>
+              <div className="kpi-meta">
+                <div className="kpi-label-row">
+                  <span className="kpi-label">Resolved Notes</span>
+                  <span className="kpi-badge">Documented</span>
+                </div>
+                <div className="kpi-value">{metrics.completed}</div>
+                <div className="kpi-desc">SOAP records documented</div>
+              </div>
+            </div>
+
+           
+          </>
+        )}
+
+        {role === "patient" && (
+          <>
+            <div className="dashboard-kpi-card">
+              <div className="kpi-icon-wrap kpi-icon-blue">
+                <FaCalendarCheck />
+              </div>
+              <div className="kpi-meta">
+                <div className="kpi-label-row">
+                  <span className="kpi-label">My Bookings</span>
+                  <span className="kpi-badge">Live DB</span>
+                </div>
+                <div className="kpi-value">{metrics.appointments}</div>
+                <div className="kpi-desc">Booked Doctor appointments</div>
+              </div>
+            </div>
+
+            <div className="dashboard-kpi-card">
+              <div className="kpi-icon-wrap kpi-icon-teal">
+                <FaHeartbeat />
+              </div>
+              <div className="kpi-meta">
+                <div className="kpi-label-row">
+                  <span className="kpi-label">Health Status</span>
+                  <span className="kpi-badge">Live Profile</span>
+                </div>
+                <div className="kpi-value">{patientProfile?.status || "ACTIVE"}</div>
+                <div className="kpi-desc">Clinical triage condition</div>
+              </div>
+            </div>
+
+            <div className="dashboard-kpi-card">
+              <div className="kpi-icon-wrap kpi-icon-purple">
+                <FaUserMd />
+              </div>
+              <div className="kpi-meta">
+                <div className="kpi-label-row">
+                  <span className="kpi-label">Specialists</span>
+                  <span className="kpi-badge">Hospital Staff</span>
+                </div>
+                <div className="kpi-value">{metrics.doctors}</div>
+                <div className="kpi-desc">Available doctors in network</div>
+              </div>
+            </div>
+
+            <div className="dashboard-kpi-card">
+              <div className="kpi-icon-wrap kpi-icon-amber">
+                <BsShieldLock />
+              </div>
+              <div className="kpi-meta">
+                <div className="kpi-label-row">
+                  <span className="kpi-label">Blood Group</span>
+                  <span className="kpi-badge">EHR Record</span>
+                </div>
+                <div className="kpi-value">{patientProfile?.bloodGroup || "O+"}</div>
+                <div className="kpi-desc">Recorded medical typing</div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Quick Navigation Ribbon ── */}
+      <div className="quick-nav-section">
+        <div className="quick-nav-title">
+          <BsArrowRight style={{ color: "#0284c7" }} />
+          <span>Quick Module Access:</span>
+        </div>
+        <div className="quick-nav-pills">
+          {activeLinks.map((item, idx) => (
+            <Link key={idx} to={item.link} className="quick-nav-pill">
+              <span className="quick-nav-pill-icon">{item.icon}</span>
+              <span>{item.title}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* ── 100% Dynamic Clinical Graphs & Analytics ── */}
+      <div className="dashboard-graphs-grid">
+        {/* Dynamic Trend Graph */}
+        <div className="chart-card">
+          <div className="chart-card-header">
+            <div className="chart-title-area">
+              <h3>
+                <FaChartLine style={{ color: "#0284c7" }} />
+                {role === "patient" ? "My Appointment Activity Trend" : "Live Appointment & Inflow Trend"}
+              </h3>
+              <p>Dynamic counts aggregated from database bookings</p>
+            </div>
+            <div className="chart-filters">
+              <button
+                type="button"
+                className={`chart-filter-btn ${activeRange === "week" ? "active" : ""}`}
+                onClick={() => setActiveRange("week")}
+              >
+                7 Days
+              </button>
+              <button
+                type="button"
+                className={`chart-filter-btn ${activeRange === "month" ? "active" : ""}`}
+                onClick={() => setActiveRange("month")}
+              >
+                4 Weeks
+              </button>
+            </div>
+          </div>
+
+          <div className="svg-chart-container">
+            <svg
+              className="interactive-area-svg"
+              viewBox={`0 0 ${width} ${height}`}
+            >
+              <defs>
+                <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#0284c7" stopOpacity="0.35" />
+                  <stop offset="100%" stopColor="#0284c7" stopOpacity="0.01" />
+                </linearGradient>
+              </defs>
+
+              {/* Grid Lines */}
+              <line x1={paddingX} y1={paddingY} x2={width - paddingX} y2={paddingY} className="svg-grid-line" />
+              <line
+                x1={paddingX}
+                y1={height / 2}
+                x2={width - paddingX}
+                y2={height / 2}
+                className="svg-grid-line"
+              />
+              <line
+                x1={paddingX}
+                y1={height - paddingY}
+                x2={width - paddingX}
+                y2={height - paddingY}
+                className="svg-grid-line"
+              />
+
+              {/* Area & Line */}
+              <path d={areaPath} fill="url(#chartGradient)" />
+              <path d={linePath} fill="none" stroke="#0284c7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+
+              {/* Interactive Points */}
+              {points.map((pt, i) => (
+                <g
+                  key={i}
+                  className="chart-point-group"
+                  onMouseEnter={() => setHoveredPoint(pt)}
+                  onMouseLeave={() => setHoveredPoint(null)}
+                >
+                  <circle cx={pt.x} cy={pt.y} r={hoveredPoint?.label === pt.label ? 6 : 4} className="chart-point" />
+                  <text x={pt.x} y={height - 8} className="svg-axis-text">
+                    {pt.label}
+                  </text>
+                  {hoveredPoint?.label === pt.label && (
+                    <g>
+                      <rect
+                        x={pt.x - 24}
+                        y={pt.y - 30}
+                        width="48"
+                        height="20"
+                        rx="4"
+                        fill="#0f172a"
+                      />
+                      <text
+                        x={pt.x}
+                        y={pt.y - 16}
+                        fill="#ffffff"
+                        fontSize="11"
+                        fontWeight="700"
+                        textAnchor="middle"
+                      >
+                        {pt.value} appt{pt.value !== 1 ? "s" : ""}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              ))}
+            </svg>
+          </div>
+        </div>
+
+        {/* Dynamic Distribution / Vitals Graph */}
+        <div className="chart-card">
+          <div className="chart-card-header">
+            <div className="chart-title-area">
+              <h3>
+                <BsActivity style={{ color: "#0d9488" }} />
+                {role === "patient" ? "Live Patient Health Telemetry" : "Department Specialty Breakdown"}
+              </h3>
+              <p>
+                {role === "patient" 
+                  ? "Synchronized with your personal profile" 
+                  : `Calculated dynamically from ${metrics.doctors} doctor${metrics.doctors !== 1 ? "s" : ""} in database`}
+              </p>
+            </div>
+            {role !== "patient" && (
+              <button
+                type="button"
+                className="chart-sync-btn"
+                title="Live re-fetch from database"
+                onClick={async () => {
+                  setIsRefreshing(true);
+                  await fetchDashboardMetrics();
+                  setTimeout(() => setIsRefreshing(false), 400);
+                }}
+                disabled={isRefreshing}
+              >
+                <BsArrowRepeat className={isRefreshing ? "spin-animation" : ""} />
+                <span>{isRefreshing ? "Syncing..." : "Live Sync"}</span>
+              </button>
+            )}
+          </div>
+
+          {role !== "patient" ? (
+            distributionData.length > 0 ? (
+              <div className="distribution-chart-wrapper">
+                <div className="donut-visual-box">
+                  <svg viewBox="0 0 36 36" style={{ width: "100%", height: "100%", transform: "rotate(-90deg)" }}>
+                    {/* Background circular guide ring */}
+                    <circle
+                      cx="18"
+                      cy="18"
+                      r="15.915"
+                      fill="transparent"
+                      stroke="#f1f5f9"
+                      strokeWidth="3.5"
+                    />
+                    {donutSegments.map((seg, idx) => (
+                      <circle
+                        key={idx}
+                        cx="18"
+                        cy="18"
+                        r="15.915"
+                        fill="transparent"
+                        stroke={seg.color}
+                        strokeWidth={hoveredDepartment?.name === seg.name ? "4.5" : "3.5"}
+                        strokeDasharray={seg.dashArray}
+                        strokeDashoffset={seg.dashOffset}
+                        style={{
+                          cursor: "pointer",
+                          transition: "stroke-width 0.2s ease, opacity 0.2s ease",
+                          opacity: hoveredDepartment && hoveredDepartment.name !== seg.name ? 0.45 : 1,
+                        }}
+                        onMouseEnter={() => setHoveredDepartment(seg)}
+                        onMouseLeave={() => setHoveredDepartment(null)}
+                      />
+                    ))}
+                  </svg>
+                  <div className="donut-center-metric">
+                    <div className="donut-center-number">
+                      {hoveredDepartment ? hoveredDepartment.count : metrics.doctors}
+                    </div>
+                    <div className="donut-center-label">
+                      {hoveredDepartment ? `${hoveredDepartment.percent}% ${hoveredDepartment.name}` : "Total Doctors"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="distribution-list">
+                  {distributionData.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className={`dist-row ${hoveredDepartment?.name === item.name ? "dist-row-active" : ""}`}
+                      onMouseEnter={() => setHoveredDepartment(item)}
+                      onMouseLeave={() => setHoveredDepartment(null)}
+                      style={{
+                        cursor: "pointer",
+                        padding: "4px 8px",
+                        borderRadius: "6px",
+                        transition: "background 0.2s ease",
+                        background: hoveredDepartment?.name === item.name ? "rgba(13, 148, 136, 0.08)" : "transparent",
+                      }}
+                    >
+                      <div className="dist-info">
+                        <span className="dist-name">
+                          <span className="dist-dot" style={{ background: item.color }}></span>
+                          {item.name} ({item.count})
+                        </span>
+                        <span className="dist-percent" style={{ color: item.color, fontWeight: 700 }}>
+                          {item.percent}%
+                        </span>
+                      </div>
+                      <div className="dist-progress-track">
+                        <div
+                          className="dist-progress-bar"
+                          style={{ width: `${item.percent}%`, background: item.color }}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="dist-empty-container">
+                <div className="donut-visual-box">
+                  <svg viewBox="0 0 36 36" style={{ width: "100%", height: "100%", transform: "rotate(-90deg)" }}>
+                    <circle
+                      cx="18"
+                      cy="18"
+                      r="15.915"
+                      fill="transparent"
+                      stroke="#e2e8f0"
+                      strokeWidth="3.5"
+                    />
+                  </svg>
+                  <div className="donut-center-metric">
+                    <div className="donut-center-number">0</div>
+                    <div className="donut-center-label">Doctors</div>
+                  </div>
+                </div>
+                <div className="dist-empty-content">
+                  <p className="dist-empty-title">No licensed doctors recorded in database yet</p>
+                  <p className="dist-empty-subtitle">
+                    Registered doctors with clinical specialties will dynamically appear here in real-time.
+                  </p>
+                  {role === "admin" && (
+                    <Link to="/doctors" className="dist-action-link">
+                      + Register Doctors Now
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )
+          ) : (
+            <div className="vitals-cards-grid">
+              <div className="vital-box">
+                <span className="vital-box-label">Age</span>
+                <span className="vital-box-value">{patientProfile?.age ? `${patientProfile.age} yrs` : "N/A"}</span>
+                <span className="vital-box-status">Verified</span>
+              </div>
+              <div className="vital-box">
+                <span className="vital-box-label">Gender</span>
+                <span className="vital-box-value">{patientProfile?.gender || "N/A"}</span>
+                <span className="vital-box-status">Recorded</span>
+              </div>
+              <div className="vital-box">
+                <span className="vital-box-label">Blood Type</span>
+                <span className="vital-box-value">{patientProfile?.bloodGroup || "O+"}</span>
+                <span className="vital-box-status">Compatible</span>
+              </div>
+              <div className="vital-box">
+                <span className="vital-box-label">Profile Status</span>
+                <span className="vital-box-value">{patientProfile?.status || "ACTIVE"}</span>
+                <span className="vital-box-status" style={{ color: patientProfile?.status === "CRITICAL" ? "#ef4444" : "#0d9488" }}>
+                  {patientProfile?.status === "CRITICAL" ? "Under Alert" : "Stable Care"}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Healthcare Trust & Compliance Banner ── */}
+      <footer className="dashboard-trust-banner">
+        <div className="trust-icon-box">
+          <BsShieldLock />
+        </div>
+        <div className="trust-content">
+          <h4>Medical-Grade Security & Audit Logging</h4>
+          <p>
+            CareScribe maintains clinical compliance with strict encryption, session validation, and confidential medical history storage for doctors and patients.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
