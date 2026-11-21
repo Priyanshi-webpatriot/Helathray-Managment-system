@@ -1051,3 +1051,422 @@
 }
 
 
+
+/* ========================================================
+   CLINICAL OUTPUT FORMATS & TEMPLATE SELECTOR STYLES
+   (RxNote, Tali AI, ROSC, Fireflies.ai Inspired)
+   ======================================================== */
+
+.cn-template-picker-section {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-top: 14px;
+}
+
+.cn-template-picker-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.cn-template-picker-title span:first-child {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.cn-template-picker-sub {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.cn-template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.cn-template-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.18s ease;
+  position: relative;
+}
+
+.cn-template-btn:hover {
+  border-color: #0284c7;
+  background: #f0f9ff;
+  transform: translateY(-1px);
+}
+
+.cn-template-btn.selected {
+  border-color: #0284c7;
+  background: #f0f9ff;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+.cn-template-btn-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.cn-template-btn-text {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cn-template-btn-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.cn-template-btn-tagline {
+  font-size: 10.5px;
+  color: #64748b;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.cn-template-check {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 800;
+  color: #0284c7;
+  flex-shrink: 0;
+}
+
+/* Step 3 Template Switcher Bar */
+.cn-step3-template-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.cn-step3-template-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.cn-step3-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cn-step3-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cn-step3-pill:hover:not(:disabled) {
+  border-color: #0284c7;
+  color: #0284c7;
+}
+
+.cn-step3-pill.active {
+  background: #0284c7;
+  border-color: #0284c7;
+  color: #ffffff !important;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
+}
+
+.cn-step3-pill:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cn-pill-active-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+/* Base Clinical Document Cards */
+.cn-doc-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cn-doc-header-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 14px;
+  border-bottom: 1.5px solid #e2e8f0;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cn-doc-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cn-doc-main-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cn-doc-sub-title {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.cn-doc-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.cn-doc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cn-doc-section-header {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cn-doc-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1e293b;
+  font-family: inherit;
+  resize: vertical;
+  background: #f8fafc;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.cn-doc-textarea:focus {
+  outline: none;
+  border-color: #0284c7;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+}
+
+.cn-doc-value-view {
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-line;
+}
+
+/* 1-0-1 Medication Table (RxNote India style) */
+.cn-med-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.cn-med-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.cn-med-table th {
+  background: #f1f5f9;
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 700;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 11.5px;
+  text-transform: uppercase;
+}
+
+.cn-med-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+.cn-med-table tr:last-child td {
+  border-bottom: none;
+}
+
+.cn-timing-chip {
+  display: inline-block;
+  padding: 2px 7px;
+  background: #fef3c7;
+  color: #b45309;
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+.cn-food-chip {
+  display: inline-block;
+  padding: 2px 7px;
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+/* Medical Certificate Special Border & Seal */
+.cn-cert-container {
+  border: 2px solid #10b981;
+  border-radius: 14px;
+  background: #fafdfc;
+  padding: 24px;
+  position: relative;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.08);
+}
+
+.cn-cert-header {
+  text-align: center;
+  border-bottom: 1.5px dashed #a7f3d0;
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+}
+
+.cn-cert-title {
+  font-size: 18px;
+  font-weight: 900;
+  color: #065f46;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.cn-cert-subtitle {
+  font-size: 12px;
+  color: #047857;
+  margin-top: 4px;
+}
+
+.cn-cert-leave-box {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 12px 0;
+}
+
+.cn-cert-sign-area {
+  margin-top: 24px;
+  display: flex;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+/* Document Action Buttons Toolbar */
+.cn-doc-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+}
+
+.cn-doc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cn-doc-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.cn-doc-btn-primary {
+  background: #0284c7;
+  border-color: #0284c7;
+  color: #ffffff;
+}
+
+.cn-doc-btn-primary:hover {
+  background: #0369a1;
+  border-color: #0369a1;
+}

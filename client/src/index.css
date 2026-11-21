@@ -2790,10 +2790,11 @@ tbody tr.row-selected {
 
 /* Print Styles */
 @media print {
-  body * {
+  body:has(.pnc-modal-sheet) * {
     visibility: hidden;
   }
-  .pnc-modal-sheet, .pnc-modal-sheet * {
+  body:has(.pnc-modal-sheet) .pnc-modal-sheet,
+  body:has(.pnc-modal-sheet) .pnc-modal-sheet * {
     visibility: visible;
   }
   .pnc-modal-sheet {
@@ -3953,6 +3954,8 @@ td button.btn.booked {
   flex-direction: column;
   gap: 8px;
   box-shadow: var(--shadow-flat);
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .doctor-card strong {
@@ -4026,46 +4029,129 @@ td button.btn.booked {
   color: var(--text-muted);
 }
 
+.msg.bot:has(.doctor-card) {
+  max-width: 96%;
+  width: 96%;
+}
+
 .booking-buttons .btn-no:hover {
   background-color: var(--border-dark);
   color: var(--text-main);
 }
 
+.booking-buttons .btn-yes.active {
+  background-color: var(--teal);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(13, 148, 136, 0.3);
+}
+
 /* Date picker inside chat suggested doctor card */
 .date-picker {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 10px;
   margin-top: 12px;
+  padding: 12px;
+  background-color: var(--bg-panel, #f8fafc);
+  border: 1px solid var(--border-dark, #e2e8f0);
+  border-radius: var(--radius-sm, 8px);
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.chat-booking-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.chat-input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.chat-input-label {
+  display: inline-flex;
   align-items: center;
-}
-
-.date-picker input[type="date"] {
-  flex: 1;
-  height: 34px !important;
-  border: 1px solid var(--border-dark) !important;
-  border-radius: var(--radius-sm) !important;
-  padding: 0 8px !important;
-  font-size: 12px !important;
-  color: var(--text-main) !important;
-  background-color: var(--bg-panel) !important;
-  outline: none !important;
-}
-
-.date-picker button {
-  height: 34px;
-  padding: 0 14px;
-  background-color: var(--primary);
-  color: #ffffff;
-  border-radius: var(--radius-sm);
+  gap: 5px;
+  font-size: 11px;
   font-weight: 700;
-  font-size: 11.5px;
+  color: var(--text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.date-picker input[type="date"],
+.date-picker input[type="time"] {
+  width: 100%;
+  height: 38px !important;
+  border: 1px solid var(--border-dark, #cbd5e1) !important;
+  border-radius: var(--radius-sm, 6px) !important;
+  padding: 0 10px !important;
+  font-size: 13px !important;
+  color: var(--text-main, #1e293b) !important;
+  background-color: #ffffff !important;
+  outline: none !important;
+  box-sizing: border-box !important;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.date-picker input[type="date"]::-webkit-calendar-picker-indicator,
+.date-picker input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.date-picker input[type="date"]::-webkit-calendar-picker-indicator:hover,
+.date-picker input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  background: #f1f5f9;
+}
+
+.date-picker input[type="date"]:focus,
+.date-picker input[type="time"]:focus {
+  border-color: var(--primary, #0284c7) !important;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15) !important;
+}
+
+.date-picker button,
+.btn-confirm-booking {
+  width: 100%;
+  height: 36px;
+  padding: 0 14px;
+  background: linear-gradient(135deg, var(--primary, #0284c7) 0%, var(--primary-hover, #0369a1) 100%);
+  color: #ffffff;
+  border-radius: var(--radius-sm, 6px);
+  font-weight: 700;
+  font-size: 12px;
   border: none;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
   transition: all 0.2s ease;
+  box-sizing: border-box;
 }
 
-.date-picker button:hover {
-  background-color: var(--primary-hover);
+.date-picker button:hover,
+.btn-confirm-booking:hover {
+  background: linear-gradient(135deg, var(--primary-hover, #0369a1) 0%, #075985 100%);
+  box-shadow: 0 4px 10px rgba(2, 132, 199, 0.35);
+  transform: translateY(-1px);
+}
+
+.date-picker button:active,
+.btn-confirm-booking:active {
+  transform: translateY(0);
 }
 
 /* ── DOCTOR AI ASSISTANT TOOLBAR ── */

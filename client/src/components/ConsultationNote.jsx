@@ -8,6 +8,8 @@ import {
   FaPlus, FaStar, FaCommentMedical, FaUserMd, FaEdit,
   FaUser, FaTrash, FaExchangeAlt, FaComments, FaCopy,
   FaShieldAlt, FaHeartbeat, FaClock,
+  FaPaperPlane, FaCertificate, FaHospital, FaBolt, FaPrint,
+  FaCheck,
 } from "react-icons/fa";
 import { BsFileEarmarkTextFill } from "react-icons/bs";
 import { MdRecordVoiceOver, MdOutlineSummarize } from "react-icons/md";
@@ -180,6 +182,990 @@ function SoapNoteCard({ data, editable, onChange }) {
 }
 
 // ==========================================
+// CLINICAL OUTPUT TEMPLATE DEFINITIONS
+// (SOAP, RxNote 1-0-1, Referral, Certificate, Discharge)
+// ==========================================
+const CLINICAL_TEMPLATES = [
+  {
+    id: "soap",
+    label: "Standard SOAP Note",
+    tagline: "Regular OPD Consultation",
+    badge: "SOAP Note",
+    icon: FaFileAlt,
+    color: "#0284c7",
+    bg: "#e0f2fe",
+  },
+  {
+    id: "quick_opd",
+    label: "Quick OPD (1-0-1)",
+    tagline: "RxNote India Style Timings",
+    badge: "RxNote 1-0-1",
+    icon: FaBolt,
+    color: "#f59e0b",
+    bg: "#fef3c7",
+  },
+  {
+    id: "referral",
+    label: "Referral Letter",
+    tagline: "Specialist Opinion & Transfer",
+    badge: "Referral",
+    icon: FaPaperPlane,
+    color: "#8b5cf6",
+    bg: "#ede9fe",
+  },
+  {
+    id: "certificate",
+    label: "Medical Certificate",
+    tagline: "Sickness / Leave Note",
+    badge: "Medical Cert",
+    icon: FaCertificate,
+    color: "#10b981",
+    bg: "#d1fae5",
+  },
+  {
+    id: "discharge",
+    label: "Discharge Summary",
+    tagline: "IPD / Procedural Summary",
+    badge: "Discharge",
+    icon: FaHospital,
+    color: "#ec4899",
+    bg: "#fce7f3",
+  },
+];
+
+// Helper: Print clinical document in a dedicated clean window
+function printClinicalDocument(title, htmlContent) {
+  const win = window.open("", "_blank", "width=850,height=900");
+  if (!win) {
+    window.print();
+    return;
+  }
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>${title}</title>
+        <style>
+          @page { margin: 18mm; size: A4; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; line-height: 1.5; margin: 0; padding: 24px; font-size: 13px; }
+          .hdr { border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end; }
+          .hdr h1 { margin: 0; font-size: 20px; color: #0369a1; text-transform: uppercase; letter-spacing: 0.5px; }
+          .hdr p { margin: 3px 0 0 0; font-size: 12px; color: #64748b; }
+          .box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; background: #fafafa; }
+          .box-title { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #0284c7; margin-bottom: 4px; }
+          .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #e0f2fe; color: #0369a1; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12.5px; }
+          th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; }
+          th { background: #f1f5f9; font-weight: 700; }
+          .sign-area { margin-top: 50px; display: flex; justify-content: flex-end; }
+          .sign-line { border-top: 1px solid #0f172a; width: 220px; text-align: center; padding-top: 6px; font-weight: 700; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        ${htmlContent}
+        <script>window.onload = function() { window.print(); };</script>
+      </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+// ==========================================
+// 1. QUICK OPD PRESCRIPTION CARD (RxNote India Inspired)
+// ==========================================
+function QuickOpdCard({ data, editable, onChange, onPrint, onCopy }) {
+  if (!data) return null;
+
+  const medList = Array.isArray(data.medications_table) ? data.medications_table : [];
+  const complaints = Array.isArray(data.chief_complaints) ? data.chief_complaints : [];
+
+  return (
+    <div className="cn-doc-card">
+      <div className="cn-doc-header-banner">
+        <div className="cn-doc-title-group">
+          <div className="cn-doc-main-title">
+            <FaBolt style={{ color: "#f59e0b" }} />
+            Quick OPD Prescription Note
+          </div>
+          <div className="cn-doc-sub-title">
+            RxNote India Standard · 1-0-1 Timings &amp; Prescriptions
+          </div>
+        </div>
+        <div className="cn-doc-badge-pill" style={{ background: "#fef3c7", color: "#b45309" }}>
+          <FaBolt style={{ marginRight: 5 }} /> Fast OPD Mode
+        </div>
+      </div>
+
+      {data.quick_summary && (
+        <div className="soap-summary-strip">
+          <MdOutlineSummarize className="soap-summary-icon" />
+          <p>{data.quick_summary}</p>
+        </div>
+      )}
+
+      {/* Grid: Complaints & Diagnosis */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#0284c7" }}>
+            <FaCommentMedical /> Chief Complaints
+          </div>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={3}
+              value={
+                Array.isArray(data.chief_complaints)
+                  ? data.chief_complaints.join("\n")
+                  : (data.chief_complaints || data.what_patient_said || "")
+              }
+              onChange={(e) => onChange("chief_complaints", e.target.value.split("\n").filter(Boolean))}
+              placeholder="e.g. Fever 101F x 2 days&#10;Sore throat x 3 days"
+            />
+          ) : (
+            <ul style={{ margin: "4px 0 0 16px", padding: 0, fontSize: "13px", color: "#334155" }}>
+              {complaints.length > 0 ? (
+                complaints.map((c, i) => <li key={i}>{c}</li>)
+              ) : (
+                <li>{data.what_patient_said || "None"}</li>
+              )}
+            </ul>
+          )}
+        </div>
+
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#0d9488" }}>
+            <FaStethoscope /> Clinical Diagnosis
+          </div>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={3}
+              value={data.diagnosis || data.likely_diagnosis || ""}
+              onChange={(e) => {
+                onChange("diagnosis", e.target.value);
+                onChange("likely_diagnosis", e.target.value);
+              }}
+              placeholder="e.g. Acute Pharyngitis with viral fever"
+            />
+          ) : (
+            <p className="cn-doc-value-view" style={{ fontWeight: 700, color: "#0f172a" }}>
+              {data.diagnosis || data.likely_diagnosis || "—"}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Examination */}
+      <div className="cn-doc-section">
+        <div className="cn-doc-section-header" style={{ color: "#7c3aed" }}>
+          <FaEye /> Clinical Examination &amp; Vitals
+        </div>
+        {editable ? (
+          <textarea
+            className="cn-doc-textarea"
+            rows={2}
+            value={data.examination || data.what_was_observed || ""}
+            onChange={(e) => {
+              onChange("examination", e.target.value);
+              onChange("what_was_observed", e.target.value);
+            }}
+            placeholder="e.g. Temp: 100.4F, Pharyngeal erythema present, Chest clear."
+          />
+        ) : (
+          <p className="cn-doc-value-view">{data.examination || data.what_was_observed || "—"}</p>
+        )}
+      </div>
+
+      {/* 1-0-1 Medications Table */}
+      <div className="cn-doc-section">
+        <div className="cn-doc-section-header" style={{ color: "#ea580c" }}>
+          <FaPills /> Prescribed Medicines (1-0-1 Timings)
+        </div>
+        {medList.length > 0 ? (
+          <div className="cn-med-table-wrapper">
+            <table className="cn-med-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Medicine / Formulation</th>
+                  <th>Dosage Timing</th>
+                  <th>Meal Relation</th>
+                  <th>Duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                {medList.map((m, idx) => (
+                  <tr key={idx}>
+                    <td style={{ color: "#94a3b8", fontWeight: 700 }}>{idx + 1}</td>
+                    <td style={{ fontWeight: 700, color: "#0f172a" }}>{m.name || "Medicine"}</td>
+                    <td><span className="cn-timing-chip">{m.timing || "1-0-1"}</span></td>
+                    <td><span className="cn-food-chip">{m.food || "After Food"}</span></td>
+                    <td style={{ fontWeight: 600, color: "#475569" }}>{m.duration || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <textarea
+            className="cn-doc-textarea"
+            rows={2}
+            value={data.medications || ""}
+            onChange={(e) => onChange("medications", e.target.value)}
+            placeholder="e.g. Tab Azithromycin 500mg (1-0-0) After Food x 3 Days"
+          />
+        )}
+      </div>
+
+      {/* Instructions & Review */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#16a34a" }}>
+            <FaClipboardList /> Instructions &amp; Advice
+          </div>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={2}
+              value={data.instructions || data.treatment_plan || ""}
+              onChange={(e) => {
+                onChange("instructions", e.target.value);
+                onChange("treatment_plan", e.target.value);
+              }}
+              placeholder="e.g. Warm water gargles, avoid cold drinks, hydrate well."
+            />
+          ) : (
+            <p className="cn-doc-value-view">{data.instructions || data.treatment_plan || "—"}</p>
+          )}
+        </div>
+
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#b45309" }}>
+            <FaCalendarAlt /> Review SOS / Next Visit
+          </div>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={2}
+              value={data.review_after || data.follow_up || ""}
+              onChange={(e) => {
+                onChange("review_after", e.target.value);
+                onChange("follow_up", e.target.value);
+              }}
+              placeholder="e.g. Review after 3 days or SOS if fever persists."
+            />
+          ) : (
+            <p className="cn-doc-value-view">{data.review_after || data.follow_up || "—"}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Card Toolbar */}
+      <div className="cn-doc-action-bar">
+        <button type="button" className="cn-doc-btn" onClick={onPrint}>
+          <FaPrint /> Print Rx Note
+        </button>
+        <button
+          type="button"
+          className="cn-doc-btn"
+          onClick={() => {
+            const lines = [
+              `OPD PRESCRIPTION: ${data.diagnosis || data.likely_diagnosis || ""}`,
+              `Complaints: ${Array.isArray(data.chief_complaints) ? data.chief_complaints.join(", ") : data.what_patient_said}`,
+              `Examination: ${data.examination || data.what_was_observed}`,
+              `Medications:\n${Array.isArray(data.medications_table) ? data.medications_table.map((m) => `• ${m.name}: ${m.timing} (${m.food}) x ${m.duration}`).join("\n") : data.medications}`,
+              `Advice: ${data.instructions || data.treatment_plan}`,
+              `Follow-up: ${data.review_after || data.follow_up}`,
+            ].join("\n\n");
+            onCopy(lines, "Quick OPD Prescription");
+          }}
+        >
+          <FaCopy /> Copy Prescription
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 2. SPECIALIST REFERRAL LETTER CARD
+// ==========================================
+function ReferralLetterCard({ data, editable, onChange, onPrint, onCopy }) {
+  if (!data) return null;
+
+  const urgencyColors = {
+    Urgent: { bg: "#fef2f2", text: "#b91c1c", border: "#fecaca" },
+    "Semi-Urgent": { bg: "#fffbeb", text: "#b45309", border: "#fde68a" },
+    Routine: { bg: "#ecfdf5", text: "#15803d", border: "#a7f3d0" },
+  };
+  const urgency = data.referral_urgency || "Routine";
+  const uStyle = urgencyColors[urgency] || urgencyColors.Routine;
+
+  return (
+    <div className="cn-doc-card">
+      <div className="cn-doc-header-banner">
+        <div className="cn-doc-title-group">
+          <div className="cn-doc-main-title">
+            <FaPaperPlane style={{ color: "#8b5cf6" }} />
+            Specialist Referral Letter
+          </div>
+          <div className="cn-doc-sub-title">
+            Formal Consultant Opinion, Clinical Summary &amp; Transfer
+          </div>
+        </div>
+        <div
+          className="cn-doc-badge-pill"
+          style={{ background: uStyle.bg, color: uStyle.text, border: `1px solid ${uStyle.border}` }}
+        >
+          <FaCheckCircle style={{ marginRight: 5, fontSize: 10 }} /> {urgency} Priority
+        </div>
+      </div>
+
+      {data.quick_summary && (
+        <div className="soap-summary-strip">
+          <MdOutlineSummarize className="soap-summary-icon" />
+          <p>{data.quick_summary}</p>
+        </div>
+      )}
+
+      {/* Recipient & Reason */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#8b5cf6" }}>
+            <FaUserMd /> To (Specialist / Department)
+          </div>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={2}
+              value={data.recipient_specialty || ""}
+              onChange={(e) => onChange("recipient_specialty", e.target.value)}
+              placeholder="e.g. Department of Cardiology / Senior Consultant"
+            />
+          ) : (
+            <p className="cn-doc-value-view" style={{ fontWeight: 700, color: "#6d28d9" }}>
+              {data.recipient_specialty || "Specialist Consultant"}
+            </p>
+          )}
+        </div>
+
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#b91c1c" }}>
+            <FaStethoscope /> Reason for Referral
+          </div>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={2}
+              value={data.referral_reason || ""}
+              onChange={(e) => onChange("referral_reason", e.target.value)}
+              placeholder="e.g. Evaluation of chest discomfort, rule out ischemic etiology"
+            />
+          ) : (
+            <p className="cn-doc-value-view">{data.referral_reason || "—"}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Clinical Summary */}
+      <div className="cn-doc-section">
+        <div className="cn-doc-section-header" style={{ color: "#0284c7" }}>
+          <FaCommentMedical /> Clinical Summary &amp; Presentation
+        </div>
+        {editable ? (
+          <textarea
+            className="cn-doc-textarea"
+            rows={3}
+            value={data.clinical_summary || data.what_patient_said || ""}
+            onChange={(e) => {
+              onChange("clinical_summary", e.target.value);
+              onChange("what_patient_said", e.target.value);
+            }}
+            placeholder="Comprehensive clinical history and physical findings..."
+          />
+        ) : (
+          <p className="cn-doc-value-view">{data.clinical_summary || data.what_patient_said || "—"}</p>
+        )}
+      </div>
+
+      {/* Investigations & Medications */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#7c3aed" }}>
+            <FaEye /> Investigations / Vitals
+          </div>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={2}
+              value={data.investigations_done || data.what_was_observed || ""}
+              onChange={(e) => {
+                onChange("investigations_done", e.target.value);
+                onChange("what_was_observed", e.target.value);
+              }}
+              placeholder="Vitals, lab tests, imaging performed..."
+            />
+          ) : (
+            <p className="cn-doc-value-view">{data.investigations_done || data.what_was_observed || "—"}</p>
+          )}
+        </div>
+
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#0d9488" }}>
+            <FaPills /> Current Medications
+          </div>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={2}
+              value={data.current_medications || data.medications || ""}
+              onChange={(e) => {
+                onChange("current_medications", e.target.value);
+                onChange("medications", e.target.value);
+              }}
+              placeholder="Current active medications..."
+            />
+          ) : (
+            <p className="cn-doc-value-view">{data.current_medications || data.medications || "—"}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Questions for Consultant */}
+      <div className="cn-doc-section">
+        <div className="cn-doc-section-header" style={{ color: "#16a34a" }}>
+          <FaLightbulb /> Specific Questions for Specialist
+        </div>
+        {editable ? (
+          <textarea
+            className="cn-doc-textarea"
+            rows={2}
+            value={data.specific_questions || ""}
+            onChange={(e) => onChange("specific_questions", e.target.value)}
+            placeholder="Specific clinical questions or management guidance requested..."
+          />
+        ) : (
+          <p className="cn-doc-value-view">{data.specific_questions || "Specialist clinical review and management advice."}</p>
+        )}
+      </div>
+
+      {/* Full Formal Referral Letter Text */}
+      {data.full_letter && (
+        <details className="transcript-accordion" open>
+          <summary>
+            <span>Full Formatted Referral Letter (Print Ready)</span>
+            <span style={{ fontSize: 12, color: "#64748b" }}>Click to collapse</span>
+          </summary>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={7}
+              style={{ marginTop: "10px" }}
+              value={data.full_letter}
+              onChange={(e) => onChange("full_letter", e.target.value)}
+            />
+          ) : (
+            <pre style={{ margin: "10px 0 0 0", whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: "13px", lineHeight: "1.6", color: "#334155" }}>
+              {data.full_letter}
+            </pre>
+          )}
+        </details>
+      )}
+
+      {/* Card Toolbar */}
+      <div className="cn-doc-action-bar">
+        <button type="button" className="cn-doc-btn" onClick={onPrint}>
+          <FaPrint /> Print Referral Letter
+        </button>
+        <button
+          type="button"
+          className="cn-doc-btn"
+          onClick={() => {
+            const letter = data.full_letter || [
+              `REFERRAL TO: ${data.recipient_specialty || "Specialist"}`,
+              `URGENCY: ${urgency}`,
+              `REASON: ${data.referral_reason}`,
+              `CLINICAL SUMMARY: ${data.clinical_summary}`,
+              `INVESTIGATIONS: ${data.investigations_done}`,
+              `MEDICATIONS: ${data.current_medications}`,
+              `QUESTIONS: ${data.specific_questions}`,
+            ].join("\n\n");
+            onCopy(letter, "Referral Letter");
+          }}
+        >
+          <FaCopy /> Copy Letter
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 3. MEDICAL SICKNESS CERTIFICATE CARD
+// ==========================================
+function MedicalCertificateCard({ data, editable, onChange, onPrint, onCopy }) {
+  if (!data) return null;
+
+  return (
+    <div className="cn-doc-card cn-cert-container">
+      <div className="cn-cert-header">
+        <div className="cn-cert-title">
+          <FaCertificate style={{ marginRight: 8, color: "#10b981", verticalAlign: "middle" }} />
+          Medical Sickness &amp; Fitness Certificate
+        </div>
+        <div className="cn-cert-subtitle">
+          Official Clinical Certification for Employer / Educational Institution
+        </div>
+      </div>
+
+      <div style={{ fontSize: "13px", color: "#334155", lineHeight: "1.6" }}>
+        This is to certify that{" "}
+        <strong style={{ color: "#065f46" }}>{data.patient_name || data._patient?.name || "the patient"}</strong> has been clinically examined and advised medical rest as detailed below:
+      </div>
+
+      {/* Certified Diagnosis */}
+      <div className="cn-doc-section" style={{ marginTop: "10px" }}>
+        <div className="cn-doc-section-header" style={{ color: "#065f46" }}>
+          <FaStethoscope /> Certified Medical Diagnosis
+        </div>
+        {editable ? (
+          <textarea
+            className="cn-doc-textarea"
+            rows={2}
+            value={data.illness_diagnosis || data.likely_diagnosis || ""}
+            onChange={(e) => {
+              onChange("illness_diagnosis", e.target.value);
+              onChange("likely_diagnosis", e.target.value);
+            }}
+            placeholder="e.g. Acute Viral Gastroenteritis with Dehydration"
+          />
+        ) : (
+          <p className="cn-doc-value-view" style={{ fontWeight: 700, color: "#0f172a" }}>
+            {data.illness_diagnosis || data.likely_diagnosis || "—"}
+          </p>
+        )}
+      </div>
+
+      {/* Leave Period Strip */}
+      <div className="cn-cert-leave-box">
+        <div>
+          <span style={{ fontSize: "11px", fontWeight: 700, color: "#047857", textTransform: "uppercase" }}>Recommended Rest</span>
+          {editable ? (
+            <input
+              type="text"
+              style={{ width: "100%", padding: "4px 8px", marginTop: "2px", border: "1px solid #a7f3d0", borderRadius: "6px", fontWeight: 700, fontSize: "13px" }}
+              value={data.rest_days_recommended || ""}
+              onChange={(e) => onChange("rest_days_recommended", e.target.value)}
+              placeholder="e.g. 3 Days"
+            />
+          ) : (
+            <div style={{ fontWeight: 800, fontSize: "15px", color: "#065f46" }}>
+              {data.rest_days_recommended || "3 Days"}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <span style={{ fontSize: "11px", fontWeight: 700, color: "#047857", textTransform: "uppercase" }}>Leave From</span>
+          {editable ? (
+            <input
+              type="text"
+              style={{ width: "100%", padding: "4px 8px", marginTop: "2px", border: "1px solid #a7f3d0", borderRadius: "6px", fontSize: "13px" }}
+              value={data.rest_from_date || ""}
+              onChange={(e) => onChange("rest_from_date", e.target.value)}
+              placeholder="e.g. Today"
+            />
+          ) : (
+            <div style={{ fontWeight: 700, fontSize: "13.5px", color: "#0f172a" }}>
+              {data.rest_from_date || "Today"}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <span style={{ fontSize: "11px", fontWeight: 700, color: "#047857", textTransform: "uppercase" }}>Leave To</span>
+          {editable ? (
+            <input
+              type="text"
+              style={{ width: "100%", padding: "4px 8px", marginTop: "2px", border: "1px solid #a7f3d0", borderRadius: "6px", fontSize: "13px" }}
+              value={data.rest_to_date || ""}
+              onChange={(e) => onChange("rest_to_date", e.target.value)}
+              placeholder="e.g. Date"
+            />
+          ) : (
+            <div style={{ fontWeight: 700, fontSize: "13.5px", color: "#0f172a" }}>
+              {data.rest_to_date || "—"}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Fitness Status Declaration */}
+      <div className="cn-doc-section">
+        <div className="cn-doc-section-header" style={{ color: "#059669" }}>
+          <FaCheckCircle /> Fitness Status Declaration
+        </div>
+        {editable ? (
+          <textarea
+            className="cn-doc-textarea"
+            rows={2}
+            value={data.fitness_status || ""}
+            onChange={(e) => onChange("fitness_status", e.target.value)}
+            placeholder="e.g. Unfit for work/school during rest period; fit to resume on [Date]"
+          />
+        ) : (
+          <p className="cn-doc-value-view">{data.fitness_status || "Unfit for work/classes during the above period."}</p>
+        )}
+      </div>
+
+      {/* Doctor's Remarks */}
+      <div className="cn-doc-section">
+        <div className="cn-doc-section-header" style={{ color: "#475569" }}>
+          <FaClipboardList /> Doctor's Clinical Remarks
+        </div>
+        {editable ? (
+          <textarea
+            className="cn-doc-textarea"
+            rows={2}
+            value={data.doctor_remarks || data.treatment_plan || ""}
+            onChange={(e) => {
+              onChange("doctor_remarks", e.target.value);
+              onChange("treatment_plan", e.target.value);
+            }}
+            placeholder="e.g. Strict bed rest and oral hydration advised."
+          />
+        ) : (
+          <p className="cn-doc-value-view">{data.doctor_remarks || data.treatment_plan || "—"}</p>
+        )}
+      </div>
+
+      {/* Full Formal Certificate preview */}
+      {data.full_certificate && (
+        <details className="transcript-accordion">
+          <summary>
+            <span>Full Formal Certificate Text (Click to preview/edit)</span>
+            <span style={{ fontSize: 12, color: "#64748b" }}>Expand</span>
+          </summary>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={6}
+              style={{ marginTop: "10px" }}
+              value={data.full_certificate}
+              onChange={(e) => onChange("full_certificate", e.target.value)}
+            />
+          ) : (
+            <pre style={{ margin: "10px 0 0 0", whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: "13px", lineHeight: "1.6", color: "#334155" }}>
+              {data.full_certificate}
+            </pre>
+          )}
+        </details>
+      )}
+
+      {/* Signature Area */}
+      <div className="cn-cert-sign-area">
+        <div style={{ textAlign: "right" }}>
+          <div style={{ borderTop: "1.5px solid #065f46", width: "200px", paddingTop: "6px", fontWeight: 700, fontSize: "12.5px", color: "#065f46" }}>
+            Attending Medical Officer
+          </div>
+          <div style={{ fontSize: "11px", color: "#64748b" }}>Signature &amp; Clinic Seal</div>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="cn-doc-action-bar">
+        <button type="button" className="cn-doc-btn" onClick={onPrint}>
+          <FaPrint /> Print Certificate
+        </button>
+        <button
+          type="button"
+          className="cn-doc-btn"
+          onClick={() => {
+            const certText = data.full_certificate || [
+              `MEDICAL SICKNESS & FITNESS CERTIFICATE`,
+              `Patient: ${data.patient_name || data._patient?.name}`,
+              `Diagnosis: ${data.illness_diagnosis}`,
+              `Recommended Rest: ${data.rest_days_recommended} (From ${data.rest_from_date} to ${data.rest_to_date})`,
+              `Fitness Status: ${data.fitness_status}`,
+              `Remarks: ${data.doctor_remarks}`,
+            ].join("\n\n");
+            onCopy(certText, "Medical Certificate");
+          }}
+        >
+          <FaCopy /> Copy Certificate
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 4. DISCHARGE & PROCEDURAL SUMMARY CARD
+// ==========================================
+function DischargeSummaryCard({ data, editable, onChange, onPrint, onCopy }) {
+  if (!data) return null;
+
+  return (
+    <div className="cn-doc-card">
+      <div className="cn-doc-header-banner">
+        <div className="cn-doc-title-group">
+          <div className="cn-doc-main-title">
+            <FaHospital style={{ color: "#ec4899" }} />
+            Discharge &amp; Procedural Summary
+          </div>
+          <div className="cn-doc-sub-title">
+            Hospital IPD Ward Discharge or Day-Care Procedure Documentation
+          </div>
+        </div>
+        <div className="cn-doc-badge-pill" style={{ background: "#fce7f3", color: "#be185d" }}>
+          <FaHospital style={{ marginRight: 5 }} /> Official Discharge Record
+        </div>
+      </div>
+
+      {data.quick_summary && (
+        <div className="soap-summary-strip">
+          <MdOutlineSummarize className="soap-summary-icon" />
+          <p>{data.quick_summary}</p>
+        </div>
+      )}
+
+      {/* Dates & Diagnosis */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#0284c7" }}>
+            <FaCalendarAlt /> Stay Period (Admission / Discharge)
+          </div>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <div style={{ flex: 1 }}>
+              <span style={{ fontSize: "11px", color: "#64748b" }}>Admission:</span>
+              {editable ? (
+                <input
+                  type="text"
+                  style={{ width: "100%", padding: "4px 8px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "12.5px" }}
+                  value={data.admission_date || ""}
+                  onChange={(e) => onChange("admission_date", e.target.value)}
+                  placeholder="e.g. Admission date"
+                />
+              ) : (
+                <div style={{ fontWeight: 600, fontSize: "12.5px" }}>{data.admission_date || "—"}</div>
+              )}
+            </div>
+            <div style={{ flex: 1 }}>
+              <span style={{ fontSize: "11px", color: "#64748b" }}>Discharge:</span>
+              {editable ? (
+                <input
+                  type="text"
+                  style={{ width: "100%", padding: "4px 8px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "12.5px" }}
+                  value={data.discharge_date || ""}
+                  onChange={(e) => onChange("discharge_date", e.target.value)}
+                  placeholder="e.g. Discharge date"
+                />
+              ) : (
+                <div style={{ fontWeight: 600, fontSize: "12.5px" }}>{data.discharge_date || "Today"}</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#be185d" }}>
+            <FaStethoscope /> Final Diagnosis
+          </div>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={2}
+              value={data.final_diagnosis || data.likely_diagnosis || ""}
+              onChange={(e) => {
+                onChange("final_diagnosis", e.target.value);
+                onChange("likely_diagnosis", e.target.value);
+              }}
+              placeholder="e.g. Acute Gastroenteritis, successfully rehydrated"
+            />
+          ) : (
+            <p className="cn-doc-value-view" style={{ fontWeight: 700, color: "#0f172a" }}>
+              {data.final_diagnosis || data.likely_diagnosis || "—"}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Procedure Performed & Vitals */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#7c3aed" }}>
+            <FaClipboardList /> Procedure / Management Performed
+          </div>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={2}
+              value={data.procedure_performed || ""}
+              onChange={(e) => onChange("procedure_performed", e.target.value)}
+              placeholder="e.g. Conservative medical management, IV rehydration"
+            />
+          ) : (
+            <p className="cn-doc-value-view">{data.procedure_performed || "—"}</p>
+          )}
+        </div>
+
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#0284c7" }}>
+            <FaEye /> Discharge Vitals &amp; Condition
+          </div>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={2}
+              value={data.discharge_vitals || data.what_was_observed || ""}
+              onChange={(e) => {
+                onChange("discharge_vitals", e.target.value);
+                onChange("what_was_observed", e.target.value);
+              }}
+              placeholder="e.g. BP 120/80, Pulse 76/min, Afebrile, Stable"
+            />
+          ) : (
+            <p className="cn-doc-value-view">{data.discharge_vitals || data.what_was_observed || "—"}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Hospital Course */}
+      <div className="cn-doc-section">
+        <div className="cn-doc-section-header" style={{ color: "#334155" }}>
+          <FaCommentMedical /> Hospital Course &amp; Response to Treatment
+        </div>
+        {editable ? (
+          <textarea
+            className="cn-doc-textarea"
+            rows={2}
+            value={data.hospital_course || data.what_patient_said || ""}
+            onChange={(e) => onChange("hospital_course", e.target.value)}
+            placeholder="Clinical progression during hospital stay..."
+          />
+        ) : (
+          <p className="cn-doc-value-view">{data.hospital_course || data.what_patient_said || "—"}</p>
+        )}
+      </div>
+
+      {/* Discharge Medications & Diet/Advice */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#8b5cf6" }}>
+            <FaPills /> Discharge Medications
+          </div>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={3}
+              value={data.discharge_medications || data.medications || ""}
+              onChange={(e) => {
+                onChange("discharge_medications", e.target.value);
+                onChange("medications", e.target.value);
+              }}
+              placeholder="Discharge medicines with dose, frequency, and duration..."
+            />
+          ) : (
+            <p className="cn-doc-value-view">{data.discharge_medications || data.medications || "—"}</p>
+          )}
+        </div>
+
+        <div className="cn-doc-section">
+          <div className="cn-doc-section-header" style={{ color: "#16a34a" }}>
+            <FaClipboardList /> Diet &amp; Lifestyle Advice
+          </div>
+          {editable ? (
+            <textarea
+              className="cn-doc-textarea"
+              rows={3}
+              value={data.diet_lifestyle_advice || data.treatment_plan || ""}
+              onChange={(e) => {
+                onChange("diet_lifestyle_advice", e.target.value);
+                onChange("treatment_plan", e.target.value);
+              }}
+              placeholder="Diet restrictions, wound care, physical activity..."
+            />
+          ) : (
+            <p className="cn-doc-value-view">{data.diet_lifestyle_advice || data.treatment_plan || "—"}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Emergency Red Flags */}
+      <div className="cn-doc-section" style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", padding: "12px 14px" }}>
+        <div className="cn-doc-section-header" style={{ color: "#b91c1c" }}>
+          <FaExclamationTriangle /> Return to Emergency Immediately If (Red Flags)
+        </div>
+        {editable ? (
+          <textarea
+            className="cn-doc-textarea"
+            rows={2}
+            style={{ background: "#ffffff", borderColor: "#fca5a5" }}
+            value={data.emergency_red_flags || (Array.isArray(data.warning_signs) ? data.warning_signs.join("\n") : "")}
+            onChange={(e) => onChange("emergency_red_flags", e.target.value)}
+            placeholder="High persistent fever, chest pain, severe vomiting, shortness of breath..."
+          />
+        ) : (
+          <p className="cn-doc-value-view" style={{ color: "#991b1b", fontWeight: 600 }}>
+            {data.emergency_red_flags || (Array.isArray(data.warning_signs) ? data.warning_signs.join(", ") : "Severe recurrence of symptoms.")}
+          </p>
+        )}
+      </div>
+
+      {/* Follow-up */}
+      <div className="cn-doc-section">
+        <div className="cn-doc-section-header" style={{ color: "#0284c7" }}>
+          <FaCalendarAlt /> Follow-up Instructions
+        </div>
+        {editable ? (
+          <textarea
+            className="cn-doc-textarea"
+            rows={2}
+            value={data.follow_up_instructions || data.follow_up || ""}
+            onChange={(e) => {
+              onChange("follow_up_instructions", e.target.value);
+              onChange("follow_up", e.target.value);
+            }}
+            placeholder="e.g. OPD review in Surgery OPD on Day 5 at 10:00 AM."
+          />
+        ) : (
+          <p className="cn-doc-value-view">{data.follow_up_instructions || data.follow_up || "—"}</p>
+        )}
+      </div>
+
+      {/* Toolbar */}
+      <div className="cn-doc-action-bar">
+        <button type="button" className="cn-doc-btn" onClick={onPrint}>
+          <FaPrint /> Print Summary
+        </button>
+        <button
+          type="button"
+          className="cn-doc-btn"
+          onClick={() => {
+            const sumText = data.full_summary || [
+              `DISCHARGE SUMMARY`,
+              `Admission: ${data.admission_date} | Discharge: ${data.discharge_date}`,
+              `Diagnosis: ${data.final_diagnosis}`,
+              `Procedure: ${data.procedure_performed}`,
+              `Hospital Course: ${data.hospital_course}`,
+              `Discharge Vitals: ${data.discharge_vitals}`,
+              `Discharge Medications: ${data.discharge_medications}`,
+              `Advice: ${data.diet_lifestyle_advice}`,
+              `Red Flags: ${data.emergency_red_flags}`,
+              `Follow-up: ${data.follow_up_instructions}`,
+            ].join("\n\n");
+            onCopy(sumText, "Discharge Summary");
+          }}
+        >
+          <FaCopy /> Copy Summary
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
 // MAIN COMPONENT: CONSULTATION NOTE
 // ==========================================
 export default function ConsultationNote({ patient }) {
@@ -203,6 +1189,7 @@ export default function ConsultationNote({ patient }) {
   const [soapData, setSoapData] = useState(null);
   const [soapNote, setSoapNote] = useState("");
   const [editedData, setEditedData] = useState(null);
+  const [selectedTemplate, setSelectedTemplate] = useState("soap");
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
   const [savedNoteId, setSavedNoteId] = useState(null);
@@ -779,47 +1766,55 @@ export default function ConsultationNote({ patient }) {
     setDialogueTurns(parseTranscriptDialogue(newVal));
   };
 
-  // ── STEP 2 → 3: GENERATE SOAP NOTE ──
-  const generateSOAPNote = async () => {
-    if (!transcript.trim()) {
+  // ── STEP 2 → 3: GENERATE CLINICAL NOTE (SOAP, RxNote, Referral, Cert, Discharge) ──
+  const generateSOAPNote = async (overrideTemplate = null) => {
+    const templateToUse = overrideTemplate || selectedTemplate || "soap";
+    const tmplObj = CLINICAL_TEMPLATES.find((t) => t.id === templateToUse) || CLINICAL_TEMPLATES[0];
+
+    const textToAnalyze = transcript.trim() || (dialogueTurns.length > 0 ? serializeDialogue(dialogueTurns) : "");
+    if (!textToAnalyze) {
       toast.warning("Please enter or transcribe a consultation dialogue before generating the note.");
       return;
     }
 
-    console.log(` [AI Note Writer] Requesting SOAP Note for patient: "${patient?.name}" | Transcript length: ${transcript.length}`);
+    console.log(`🚀 [AI Note Writer] Requesting Note (${templateToUse}) for patient: "${patient?.name}" | Transcript length: ${textToAnalyze.length}`);
     setLoading(true);
-    setLoadingMsg("Gemini AI is analyzing transcript and generating SOAP note...");
+    setLoadingMsg(`Gemini AI is generating ${tmplObj.label}...`);
 
     try {
       const res = await API.post(
         "/consultation-notes/generate-soap",
-        { transcript, patient },
+        { transcript: textToAnalyze, patient, templateType: templateToUse },
         { headers: { role: user.role || "doctor", userid: user.id } }
       );
 
-      console.log(" [AI Note Writer] SOAP Note generated successfully:", res.data);
-      setSoapData(res.data.soapData);
-      setSoapNote(res.data.soapNote);
-      setEditedData(JSON.parse(JSON.stringify(res.data.soapData)));
+      console.log("✅ [AI Note Writer] Clinical Note generated successfully:", res.data);
+      const incomingData = res.data.soapData || {};
+      incomingData.templateType = res.data.templateType || templateToUse;
+
+      setSoapData(incomingData);
+      setSoapNote(res.data.soapNote || JSON.stringify(incomingData));
+      setEditedData(JSON.parse(JSON.stringify(incomingData)));
+      setSelectedTemplate(templateToUse);
 
       // Auto-save draft
-      console.log(" [AI Note Writer] Auto-saving note draft to database...");
+      console.log("💾 [AI Note Writer] Auto-saving note draft to database...");
       const dr = await API.post(
         "/consultation-notes/save-draft",
-        { patientId: patient.id, transcript, soapNote: res.data.soapNote },
+        { patientId: patient.id, transcript: textToAnalyze, soapNote: JSON.stringify(incomingData) },
         { headers: { role: user.role || "doctor", userid: user.id } }
       );
 
-      console.log(" [AI Note Writer] Draft note saved with ID:", dr.data?.note?.id);
+      console.log("✅ [AI Note Writer] Draft note saved with ID:", dr.data?.note?.id);
       setSavedNoteId(dr.data.note.id);
-      toast.success("SOAP Note generated and draft saved!");
-      // Move to Step 3 (Review & Edit SOAP Note)
+      toast.success(`${tmplObj.label} generated and draft saved!`);
+      // Move to Step 3 (Review & Edit Note)
       setCurrentStep(3);
     } catch (err) {
       const serverMsg = err?.response?.data?.detail
         ? `${err?.response?.data?.error || "Error"}: ${err?.response?.data?.detail}`
         : (err?.response?.data?.error || err.message);
-      console.error(" [AI Note Writer] SOAP generation failed:", {
+      console.error("❌ [AI Note Writer] Generation failed:", {
         error: err,
         serverMsg,
         response: err.response?.data,
@@ -829,6 +1824,218 @@ export default function ConsultationNote({ patient }) {
       setLoading(false);
       setLoadingMsg("");
     }
+  };
+
+  const handlePrintTemplate = (data) => {
+    if (!data) return;
+    const type = data.templateType || selectedTemplate || "soap";
+    const patName = patient?.name || data._patient?.name || "Patient";
+    const dateStr = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    const docName = user?.name ? `Dr. ${user.name}` : "Attending Physician";
+    const clinic = user?.clinicName || "Healthray Multi-Specialty Clinic";
+
+    let title = "Clinical Consultation Document";
+    let bodyHtml = "";
+
+    if (type === "quick_opd") {
+      title = `OPD Prescription - ${patName}`;
+      const medRows = Array.isArray(data.medications_table) && data.medications_table.length > 0
+        ? data.medications_table.map((m, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td><strong>${m.name}</strong></td>
+              <td><span class="badge">${m.timing || "1-0-1"}</span></td>
+              <td>${m.food || "After Food"}</td>
+              <td>${m.duration || "—"}</td>
+            </tr>
+          `).join("")
+        : `<tr><td colspan="5">${data.medications || "No medications prescribed"}</td></tr>`;
+
+      const compList = Array.isArray(data.chief_complaints) && data.chief_complaints.length > 0
+        ? data.chief_complaints.map((c) => `<li>${c}</li>`).join("")
+        : `<li>${data.what_patient_said || "—"}</li>`;
+
+      bodyHtml = `
+        <div class="hdr">
+          <div>
+            <h1>${clinic}</h1>
+            <p>Outpatient Department (OPD) Prescription</p>
+          </div>
+          <div style="text-align: right;">
+            <p><strong>Date:</strong> ${dateStr}</p>
+            <p><strong>Doctor:</strong> ${docName}</p>
+          </div>
+        </div>
+        <div class="box">
+          <p><strong>Patient:</strong> ${patName} | <strong>Age/Gender:</strong> ${patient?.age || "—"} / ${patient?.gender || "—"} | <strong>Blood Group:</strong> ${patient?.bloodGroup || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Chief Complaints</div>
+          <ul style="margin: 4px 0 0 16px; padding: 0;">${compList}</ul>
+        </div>
+        <div class="box">
+          <div class="box-title">Diagnosis & Examination</div>
+          <p><strong>Diagnosis:</strong> ${data.diagnosis || data.likely_diagnosis || "—"}</p>
+          <p><strong>Examination:</strong> ${data.examination || data.what_was_observed || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Rx - Prescribed Medications (1-0-1 Timings)</div>
+          <table>
+            <thead>
+              <tr><th>#</th><th>Medicine</th><th>Timing</th><th>Relation to Food</th><th>Duration</th></tr>
+            </thead>
+            <tbody>${medRows}</tbody>
+          </table>
+        </div>
+        <div class="box">
+          <div class="box-title">Instructions & Follow-up</div>
+          <p><strong>Advice:</strong> ${data.instructions || data.treatment_plan || "—"}</p>
+          <p><strong>Review:</strong> ${data.review_after || data.follow_up || "—"}</p>
+        </div>
+        <div class="sign-area">
+          <div class="sign-line">${docName}<br/><small style="font-weight: normal; color: #64748b;">Signature / Reg No.</small></div>
+        </div>
+      `;
+    } else if (type === "referral") {
+      title = `Specialist Referral Letter - ${patName}`;
+      bodyHtml = `
+        <div class="hdr">
+          <div>
+            <h1>${clinic}</h1>
+            <p>Clinical Specialist Referral Letter</p>
+          </div>
+          <div style="text-align: right;">
+            <p><strong>Date:</strong> ${dateStr}</p>
+            <p><strong>Priority:</strong> <span class="badge">${data.referral_urgency || "Routine"}</span></p>
+          </div>
+        </div>
+        <div class="box">
+          <p><strong>To:</strong> ${data.recipient_specialty || "Specialist Consultant"}</p>
+          <p><strong>Re:</strong> Referral of ${patName} (Age: ${patient?.age || "—"}, Gender: ${patient?.gender || "—"})</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Reason for Referral</div>
+          <p>${data.referral_reason || "Specialist evaluation and management."}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Clinical History & Presentation</div>
+          <p>${data.clinical_summary || data.what_patient_said || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Investigations & Current Medications</div>
+          <p><strong>Investigations / Vitals:</strong> ${data.investigations_done || data.what_was_observed || "—"}</p>
+          <p><strong>Active Medications:</strong> ${data.current_medications || data.medications || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Provisional Diagnosis & Specific Questions</div>
+          <p><strong>Suspected Diagnosis:</strong> ${data.provisional_diagnosis || data.likely_diagnosis || "—"}</p>
+          <p><strong>Questions for Consultant:</strong> ${data.specific_questions || "Kindly evaluate and advise on further care."}</p>
+        </div>
+        <div class="sign-area">
+          <div class="sign-line">${docName}<br/><small style="font-weight: normal; color: #64748b;">Referring Practitioner</small></div>
+        </div>
+      `;
+    } else if (type === "certificate") {
+      title = `Medical Sickness Certificate - ${patName}`;
+      bodyHtml = `
+        <div class="hdr" style="border-bottom: 2px solid #10b981;">
+          <div>
+            <h1 style="color: #065f46;">${clinic}</h1>
+            <p style="color: #047857; font-weight: 700;">Official Medical Sickness &amp; Fitness Certificate</p>
+          </div>
+          <div style="text-align: right;">
+            <p><strong>Date of Issue:</strong> ${dateStr}</p>
+          </div>
+        </div>
+        <div style="margin: 20px 0; font-size: 14px; line-height: 1.8;">
+          <p>This is to certify that <strong>${data.patient_name || patName}</strong>, Age: ${patient?.age || "—"}, Gender: ${patient?.gender || "—"}, has been clinically examined and diagnosed with <strong>${data.illness_diagnosis || data.likely_diagnosis || "Acute medical illness"}</strong>.</p>
+          <p>Due to this condition, the patient is advised medical rest and absence from duty/school for a period of <strong>${data.rest_days_recommended || "3 Days"}</strong>, starting from <strong>${data.rest_from_date || dateStr}</strong> to <strong>${data.rest_to_date || "as advised"}</strong>.</p>
+          <p><strong>Fitness Status:</strong> ${data.fitness_status || "Unfit for occupational / academic duties during the stated rest period."}</p>
+          <p><strong>Remarks & Guidance:</strong> ${data.doctor_remarks || data.treatment_plan || "Strict rest and prescribed medications advised."}</p>
+        </div>
+        <div class="sign-area" style="margin-top: 60px;">
+          <div class="sign-line">${docName}<br/><small style="font-weight: normal; color: #64748b;">Authorized Medical Officer (Seal &amp; Signature)</small></div>
+        </div>
+      `;
+    } else if (type === "discharge") {
+      title = `Discharge Summary - ${patName}`;
+      bodyHtml = `
+        <div class="hdr" style="border-bottom: 2px solid #ec4899;">
+          <div>
+            <h1 style="color: #be185d;">${clinic}</h1>
+            <p>Hospital Discharge &amp; Procedural Summary</p>
+          </div>
+          <div style="text-align: right;">
+            <p><strong>Admission:</strong> ${data.admission_date || "—"}</p>
+            <p><strong>Discharge:</strong> ${data.discharge_date || dateStr}</p>
+          </div>
+        </div>
+        <div class="box">
+          <p><strong>Patient:</strong> ${patName} | <strong>Age/Gender:</strong> ${patient?.age || "—"} / ${patient?.gender || "—"}</p>
+          <p><strong>Final Diagnosis:</strong> ${data.final_diagnosis || data.likely_diagnosis || "—"}</p>
+          <p><strong>Procedure / Management:</strong> ${data.procedure_performed || "Conservative management"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Hospital Course & Clinical Response</div>
+          <p>${data.hospital_course || data.what_patient_said || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Discharge Vitals & Medications</div>
+          <p><strong>Vitals at Discharge:</strong> ${data.discharge_vitals || data.what_was_observed || "—"}</p>
+          <p><strong>Discharge Medications:</strong> ${data.discharge_medications || data.medications || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Diet, Advice & Red Flags</div>
+          <p><strong>Diet / Advice:</strong> ${data.diet_lifestyle_advice || data.treatment_plan || "—"}</p>
+          <p style="color: #b91c1c;"><strong>Emergency Red Flags:</strong> ${data.emergency_red_flags || "Return immediately in case of severe pain, high fever, or breathlessness."}</p>
+          <p><strong>Follow-up:</strong> ${data.follow_up_instructions || data.follow_up || "—"}</p>
+        </div>
+        <div class="sign-area">
+          <div class="sign-line">${docName}<br/><small style="font-weight: normal; color: #64748b;">Consultant In-Charge</small></div>
+        </div>
+      `;
+    } else {
+      title = `Clinical SOAP Note - ${patName}`;
+      bodyHtml = `
+        <div class="hdr">
+          <div>
+            <h1>${clinic}</h1>
+            <p>Clinical SOAP Consultation Note</p>
+          </div>
+          <div style="text-align: right;">
+            <p><strong>Date:</strong> ${dateStr}</p>
+            <p><strong>Doctor:</strong> ${docName}</p>
+          </div>
+        </div>
+        <div class="box">
+          <p><strong>Patient:</strong> ${patName} | <strong>Age/Gender:</strong> ${patient?.age || "—"} / ${patient?.gender || "—"}</p>
+          <p><strong>Executive Summary:</strong> ${data.quick_summary || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Subjective (What Patient Said)</div>
+          <p>${data.what_patient_said || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Objective (Clinical Findings & Vitals)</div>
+          <p>${data.what_was_observed || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Assessment (Diagnosis)</div>
+          <p>${data.likely_diagnosis || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Plan (Treatment & Prescriptions)</div>
+          <p><strong>Treatment Plan:</strong> ${data.treatment_plan || "—"}</p>
+          <p><strong>Medications:</strong> ${data.medications || "—"}</p>
+          <p><strong>Follow-up:</strong> ${data.follow_up || "—"}</p>
+        </div>
+        <div class="sign-area">
+          <div class="sign-line">${docName}<br/><small style="font-weight: normal; color: #64748b;">Attending Physician</small></div>
+        </div>
+      `;
+    }
+
+    printClinicalDocument(title, bodyHtml);
   };
 
   const handleFieldEdit = (key, value) => {
@@ -988,7 +2195,7 @@ export default function ConsultationNote({ patient }) {
                     </div>
 
                     <div className="cn-safety-items">
-                      {/* 💊 Active Daily Medications */}
+                      {/* Active Daily Medications */}
                       <div className="cn-safety-row">
                         <div className="cn-safety-lbl">
                           <FaPills className="cn-safety-ico meds" />
@@ -999,7 +2206,7 @@ export default function ConsultationNote({ patient }) {
                         </div>
                       </div>
 
-                      {/* ⏱️ Last Visit Flash (1 sentence) */}
+                      {/* Last Visit Flash (1 sentence) */}
                       <div className="cn-safety-row flash-row">
                         <div className="cn-safety-lbl">
                           <FaClock className="cn-safety-ico flash" />
@@ -1484,12 +2691,72 @@ export default function ConsultationNote({ patient }) {
                             />
                           </div>
                         )}
+
+                        {/* Clinical Output Format Selector (RxNote, Tali AI Inspired) */}
+                        <div className="cn-template-picker-section">
+                          <div className="cn-template-picker-title">
+                            <span>Select Clinical Output Format:</span>
+                            <span className="cn-template-picker-sub">Choose template before generating</span>
+                          </div>
+                          <div className="cn-template-grid">
+                            {CLINICAL_TEMPLATES.map((tmpl) => {
+                              const Icon = tmpl.icon;
+                              const isSelected = selectedTemplate === tmpl.id;
+                              return (
+                                <button
+                                  key={tmpl.id}
+                                  type="button"
+                                  className={`cn-template-btn ${isSelected ? "selected" : ""}`}
+                                  onClick={() => setSelectedTemplate(tmpl.id)}
+                                >
+                                  <div className="cn-template-btn-icon" style={{ color: tmpl.color, background: tmpl.bg }}>
+                                    <Icon />
+                                  </div>
+                                  <div className="cn-template-btn-text">
+                                    <span className="cn-template-btn-label">{tmpl.label}</span>
+                                    <span className="cn-template-btn-tagline">{tmpl.tagline}</span>
+                                  </div>
+                                  {isSelected && <FaCheck className="cn-template-check" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </>
                     )}
 
-                    {/* STEP 3: REVIEW & EDIT SOAP NOTE */}
+                    {/* STEP 3: REVIEW & EDIT CLINICAL NOTE */}
                     {currentStep === 3 && editedData && (
                       <>
+                        {/* 1-Click Template Switcher Bar */}
+                        <div className="cn-step3-template-bar">
+                          <span className="cn-step3-template-title">Format:</span>
+                          <div className="cn-step3-pills">
+                            {CLINICAL_TEMPLATES.map((tmpl) => {
+                              const Icon = tmpl.icon;
+                              const isActive = (editedData?.templateType || selectedTemplate) === tmpl.id;
+                              return (
+                                <button
+                                  key={tmpl.id}
+                                  type="button"
+                                  className={`cn-step3-pill ${isActive ? "active" : ""}`}
+                                  onClick={() => {
+                                    if (!isActive) {
+                                      generateSOAPNote(tmpl.id);
+                                    }
+                                  }}
+                                  disabled={loading}
+                                  title={`Switch format to ${tmpl.label}`}
+                                >
+                                  <Icon style={{ color: isActive ? "#ffffff" : tmpl.color }} />
+                                  <span>{tmpl.label}</span>
+                                  {isActive && <span className="cn-pill-active-dot" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
                         <details className="transcript-accordion">
                           <summary>
                             <span>View Original Transcript</span>
@@ -1504,11 +2771,46 @@ export default function ConsultationNote({ patient }) {
                           />
                         </details>
 
-                        <SoapNoteCard
-                          data={editedData}
-                          editable={true}
-                          onChange={handleFieldEdit}
-                        />
+                        {/* Render Active Template View */}
+                        {editedData.templateType === "quick_opd" ? (
+                          <QuickOpdCard
+                            data={editedData}
+                            editable={true}
+                            onChange={handleFieldEdit}
+                            onPrint={() => handlePrintTemplate(editedData)}
+                            onCopy={(text, label) => copyToClipboard(text, label)}
+                          />
+                        ) : editedData.templateType === "referral" ? (
+                          <ReferralLetterCard
+                            data={editedData}
+                            editable={true}
+                            onChange={handleFieldEdit}
+                            onPrint={() => handlePrintTemplate(editedData)}
+                            onCopy={(text, label) => copyToClipboard(text, label)}
+                          />
+                        ) : editedData.templateType === "certificate" ? (
+                          <MedicalCertificateCard
+                            data={editedData}
+                            editable={true}
+                            onChange={handleFieldEdit}
+                            onPrint={() => handlePrintTemplate(editedData)}
+                            onCopy={(text, label) => copyToClipboard(text, label)}
+                          />
+                        ) : editedData.templateType === "discharge" ? (
+                          <DischargeSummaryCard
+                            data={editedData}
+                            editable={true}
+                            onChange={handleFieldEdit}
+                            onPrint={() => handlePrintTemplate(editedData)}
+                            onCopy={(text, label) => copyToClipboard(text, label)}
+                          />
+                        ) : (
+                          <SoapNoteCard
+                            data={editedData}
+                            editable={true}
+                            onChange={handleFieldEdit}
+                          />
+                        )}
                       </>
                     )}
 
@@ -1523,7 +2825,7 @@ export default function ConsultationNote({ patient }) {
                           <span className="cn-success-badge">EHR Record Approved</span>
                           <h3 className="cn-success-title">Consultation Note Saved!</h3>
                           <p className="cn-success-subtitle">
-                            The clinical SOAP note has been officially signed and archived in{" "}
+                            The clinical note has been officially signed and archived in{" "}
                             <strong>{patient?.name || "the patient"}</strong>&apos;s medical record.
                             A patient-friendly visit summary is now visible on their patient portal.
                           </p>
@@ -1539,7 +2841,9 @@ export default function ConsultationNote({ patient }) {
                             </div>
                             <div className="cn-success-meta-item">
                               <span className="cn-meta-lbl">Status</span>
-                              <span className="cn-status-pill-green">● Approved &amp; Signed</span>
+                              <span className="cn-status-pill-green">
+                                <FaCheckCircle style={{ marginRight: 4, fontSize: 11 }} /> Approved &amp; Signed
+                              </span>
                             </div>
                             <div className="cn-success-meta-item">
                               <span className="cn-meta-lbl">Patient Summary</span>
@@ -1583,31 +2887,82 @@ export default function ConsultationNote({ patient }) {
                       {currentStep === 2 ? (
                         <button
                           className="consult-btn btn-primary"
-                          onClick={generateSOAPNote}
+                          onClick={() => generateSOAPNote(selectedTemplate)}
                           disabled={loading || (!transcript.trim() && dialogueTurns.length === 0)}
                         >
-                          <HiOutlineSparkles style={{ marginRight: 6 }} /> Generate Clinical SOAP Note
+                          <HiOutlineSparkles style={{ marginRight: 6 }} />
+                          Generate {CLINICAL_TEMPLATES.find((t) => t.id === selectedTemplate)?.label || "Clinical SOAP Note"}
                         </button>
                       ) : (
                         <div className="cn-footer-right">
                           <button
                             type="button"
                             className="consult-btn btn-outline"
+                            onClick={() => handlePrintTemplate(editedData)}
+                            title="Print this clinical document"
+                          >
+                            <FaPrint style={{ marginRight: 6 }} /> Print
+                          </button>
+                          <button
+                            type="button"
+                            className="consult-btn btn-outline"
                             onClick={() => {
-                              const formatted = [
-                                editedData?.quick_summary && `Summary: ${editedData.quick_summary}`,
-                                editedData?.what_patient_said && `What Patient Said: ${editedData.what_patient_said}`,
-                                editedData?.what_was_observed && `What Was Observed: ${editedData.what_was_observed}`,
-                                editedData?.likely_diagnosis && `Likely Diagnosis: ${editedData.likely_diagnosis}`,
-                                editedData?.treatment_plan && `Treatment Plan: ${editedData.treatment_plan}`,
-                                editedData?.medications && `Medicines Prescribed: ${editedData.medications}`,
-                                editedData?.follow_up && `Follow-up: ${editedData.follow_up}`,
-                              ]
-                                .filter(Boolean)
-                                .join("\n\n");
-                              copyToClipboard(formatted || soapNote, "SOAP Note");
+                              const type = editedData?.templateType || selectedTemplate;
+                              let textToCopy = "";
+                              if (type === "quick_opd") {
+                                textToCopy = editedData?.full_opd_note || [
+                                  `OPD PRESCRIPTION: ${editedData?.diagnosis || editedData?.likely_diagnosis}`,
+                                  `Complaints: ${Array.isArray(editedData?.chief_complaints) ? editedData?.chief_complaints.join(", ") : editedData?.what_patient_said}`,
+                                  `Examination: ${editedData?.examination || editedData?.what_was_observed}`,
+                                  `Medications:\n${Array.isArray(editedData?.medications_table) ? editedData?.medications_table.map((m) => `• ${m.name}: ${m.timing} (${m.food}) x ${m.duration}`).join("\n") : editedData?.medications}`,
+                                  `Instructions: ${editedData?.instructions || editedData?.treatment_plan}`,
+                                  `Review: ${editedData?.review_after || editedData?.follow_up}`,
+                                ].join("\n\n");
+                              } else if (type === "referral") {
+                                textToCopy = editedData?.full_letter || [
+                                  `SPECIALIST REFERRAL: ${editedData?.recipient_specialty}`,
+                                  `Reason: ${editedData?.referral_reason}`,
+                                  `Clinical Summary: ${editedData?.clinical_summary}`,
+                                  `Investigations: ${editedData?.investigations_done}`,
+                                  `Medications: ${editedData?.current_medications}`,
+                                  `Questions: ${editedData?.specific_questions}`,
+                                ].join("\n\n");
+                              } else if (type === "certificate") {
+                                textToCopy = editedData?.full_certificate || [
+                                  `MEDICAL CERTIFICATE`,
+                                  `Patient: ${editedData?.patient_name || patient?.name}`,
+                                  `Diagnosis: ${editedData?.illness_diagnosis}`,
+                                  `Rest: ${editedData?.rest_days_recommended} (From ${editedData?.rest_from_date} to ${editedData?.rest_to_date})`,
+                                  `Fitness: ${editedData?.fitness_status}`,
+                                  `Remarks: ${editedData?.doctor_remarks}`,
+                                ].join("\n\n");
+                              } else if (type === "discharge") {
+                                textToCopy = editedData?.full_summary || [
+                                  `DISCHARGE SUMMARY`,
+                                  `Admission: ${editedData?.admission_date} | Discharge: ${editedData?.discharge_date}`,
+                                  `Diagnosis: ${editedData?.final_diagnosis}`,
+                                  `Procedure: ${editedData?.procedure_performed}`,
+                                  `Hospital Course: ${editedData?.hospital_course}`,
+                                  `Discharge Vitals: ${editedData?.discharge_vitals}`,
+                                  `Discharge Medications: ${editedData?.discharge_medications}`,
+                                  `Follow-up: ${editedData?.follow_up_instructions}`,
+                                ].join("\n\n");
+                              } else {
+                                textToCopy = [
+                                  editedData?.quick_summary && `Summary: ${editedData.quick_summary}`,
+                                  editedData?.what_patient_said && `What Patient Said: ${editedData.what_patient_said}`,
+                                  editedData?.what_was_observed && `What Was Observed: ${editedData.what_was_observed}`,
+                                  editedData?.likely_diagnosis && `Likely Diagnosis: ${editedData.likely_diagnosis}`,
+                                  editedData?.treatment_plan && `Treatment Plan: ${editedData.treatment_plan}`,
+                                  editedData?.medications && `Medicines Prescribed: ${editedData.medications}`,
+                                  editedData?.follow_up && `Follow-up: ${editedData.follow_up}`,
+                                ]
+                                  .filter(Boolean)
+                                  .join("\n\n");
+                              }
+                              copyToClipboard(textToCopy || soapNote, "Clinical Note");
                             }}
-                            title="Copy SOAP Note summary"
+                            title="Copy clinical document"
                           >
                             <FaCopy style={{ marginRight: 6 }} /> Copy Note
                           </button>

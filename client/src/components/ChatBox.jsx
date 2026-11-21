@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import API from "../api";
 import "../styles/chatbox.css";
-import { FaComment } from "react-icons/fa";
+import { FaComment, FaCheckCircle, FaCalendarAlt, FaClock } from "react-icons/fa";
 import { toast } from "react-toastify";
 
 export default function ChatBox() {
@@ -284,7 +284,7 @@ export default function ChatBox() {
 
                         <div className="booking-buttons">
                           <button
-                            className="btn-yes"
+                            className={`btn-yes ${activeDoctorId === c.doctor.id ? "active" : ""}`}
                             onClick={() => setActiveDoctorId(c.doctor.id)}
                           >
                             Yes
@@ -309,19 +309,34 @@ export default function ChatBox() {
                     {/* DATE + TIME PICKER */}
                     {activeDoctorId === c.doctor.id && (
                       <div className="date-picker">
-                        <input
-                          type="date"
-                          value={selectedDate}
-                          onChange={(e) => setSelectedDate(e.target.value)}
-                        />
+                        <div className="chat-booking-inputs">
+                          <div className="chat-input-field">
+                            <label className="chat-input-label">
+                              <FaCalendarAlt style={{ fontSize: 10 }} /> Date
+                            </label>
+                            <input
+                              type="date"
+                              value={selectedDate}
+                              onChange={(e) => setSelectedDate(e.target.value)}
+                              min={new Date().toISOString().split("T")[0]}
+                            />
+                          </div>
 
-                        <input
-                          type="time"
-                          value={selectedTime}
-                          onChange={(e) => setSelectedTime(e.target.value)}
-                        />
+                          <div className="chat-input-field">
+                            <label className="chat-input-label">
+                              <FaClock style={{ fontSize: 10 }} /> Time
+                            </label>
+                            <input
+                              type="time"
+                              value={selectedTime}
+                              onChange={(e) => setSelectedTime(e.target.value)}
+                            />
+                          </div>
+                        </div>
 
                         <button
+                          type="button"
+                          className="btn-confirm-booking"
                           onClick={() =>
                             handleBookFromChat(
                               c.doctor.id,
@@ -330,7 +345,7 @@ export default function ChatBox() {
                             )
                           }
                         >
-                          Confirm
+                          <FaCheckCircle style={{ marginRight: 6 }} /> Confirm Appointment
                         </button>
                       </div>
                     )}

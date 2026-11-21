@@ -729,23 +729,154 @@ If JSON is not possible, return plain lines starting with Doctor: and Patient:.`
 // ==========================================
 export const generateSOAPNote = async (req, res) => {
   const reqStart = Date.now();
-  console.log("\n==================== [AI NOTE WRITER: GENERATE SOAP] ====================");
+  console.log("\n==================== [AI NOTE WRITER: GENERATE CLINICAL DOCUMENT] ====================");
 
   try {
-    const { transcript, patient } = req.body;
+    const { transcript, patient, templateType = "soap" } = req.body;
+    const todayIso = new Date().toISOString().split("T")[0];
 
-    console.log(`[SOAP] Patient: "${patient?.name || "Unknown"}" (ID: ${patient?.id || "N/A"}) | Age: ${patient?.age || "N/A"}`);
-    console.log(`[SOAP] Transcript length: ${transcript ? transcript.length : 0} chars`);
+    console.log(`[Clinical AI] Template: "${templateType}" | Patient: "${patient?.name || "Unknown"}" (ID: ${patient?.id || "N/A"}) | Age: ${patient?.age || "N/A"}`);
+    console.log(`[Clinical AI] Transcript length: ${transcript ? transcript.length : 0} chars | Date: ${todayIso}`);
 
     if (!transcript || !transcript.trim()) {
-      console.warn("⚠️ [SOAP] Transcript is empty or missing");
+      console.warn("⚠️ [Clinical AI] Transcript is empty or missing");
       return res.status(400).json({ error: "Transcript is required" });
     }
 
-    const messages = [
-      {
-        role: "system",
-        content: `
+    let systemPrompt = "";
+
+    if (templateType === "referral") {
+      systemPrompt = `
+You are an expert clinical medical scribe. You analyze doctor-patient consultations and write formal, high-quality Specialist Referral Letters from the attending physician to a medical or surgical specialist.
+
+RULES:
+- Professional clinical letter tone. Clear, succinct, and medically precise.
+- Return ONLY a valid JSON object. No markdown backticks, no prose before or after.
+- Never leave fields empty.
+
+Return this exact JSON structure:
+{
+  "templateType": "referral",
+  "recipient_specialty": "Suggested specialist field (e.g. Cardiology, Orthopedic Surgery, Gastroenterology, Pulmonology, Neurology)",
+  "referral_urgency": "Routine / Urgent / Semi-Urgent",
+  "referral_reason": "Specific clinical reason for referral and requested specialist evaluation",
+  "clinical_summary": "Comprehensive clinical history, presenting complaints, duration, and physical findings",
+  "investigations_done": "Vitals, ECG, labs, or imaging observed (or 'None performed yet; recommended at specialist discretion')",
+  "current_medications": "Current active medications prescribed or taken by the patient",
+  "provisional_diagnosis": "Primary provisional / suspected diagnosis",
+  "specific_questions": "Clear, specific clinical questions for the consultant specialist to address",
+  "full_letter": "A complete, beautifully formatted referral letter text ready to print on clinic letterhead with salutation, body paragraphs, and doctor sign-off block",
+  "what_patient_said": "Chief complaint summary",
+  "what_was_observed": "Examination findings",
+  "likely_diagnosis": "Provisional diagnosis",
+  "treatment_plan": "Referral plan and current supportive care",
+  "medications": "Current medications",
+  "quick_summary": "10-second summary explaining why this patient is being referred"
+}
+`;
+    } else if (templateType === "certificate") {
+      systemPrompt = `
+You are an expert clinical medical scribe. You analyze doctor-patient consultations and generate an official, legally sound Medical Sickness and Fitness Certificate for an employer, school, or institution.
+The current consultation date is ${todayIso}.
+
+RULES:
+- Official, formal medical certificate language.
+- Compute realistic rest duration based on clinical severity (e.g. 2 to 5 days for acute infections/pain).
+- rest_from_date MUST be the consultation date (${todayIso}).
+- rest_to_date MUST be the exact end date calculated based on rest_days_recommended (e.g. if rest is 2 days starting ${todayIso}, rest_to_date is the 2nd day).
+- fitness_status must declare the exact date the patient is fit to resume duties (the day following rest_to_date).
+- Dates MUST use YYYY-MM-DD format.
+- Return ONLY a valid JSON object. No markdown backticks, no prose before or after.
+
+Return this exact JSON structure:
+{
+  "templateType": "certificate",
+  "patient_name": "${patient?.name || "Patient"}",
+  "illness_diagnosis": "Formal clinical diagnosis of the acute medical condition",
+  "rest_days_recommended": "Recommended duration of rest (e.g. '2 Days', '3 Days', '5 Days')",
+  "rest_from_date": "${todayIso}",
+  "rest_to_date": "End date of medical leave (YYYY-MM-DD calculated from rest_from_date + rest days)",
+  "fitness_status": "Expected fitness status (e.g. 'Unfit for duty/classes during rest period; Fit to resume regular duties on [Day After rest_to_date YYYY-MM-DD]')",
+  "doctor_remarks": "Advice on physical activity, rest, contagious isolation if relevant, or duty restrictions",
+  "full_certificate": "A formal, ready-to-print official Medical Certificate document with certificate heading, patient details, certified diagnosis, bed rest period, fit-to-resume declaration, and signature line",
+  "what_patient_said": "Complaints justifying medical leave",
+  "what_was_observed": "Clinical verification of sickness",
+  "likely_diagnosis": "Certified illness diagnosis",
+  "treatment_plan": "Medical rest and treatment plan",
+  "medications": "Prescribed medications for recovery",
+  "quick_summary": "Summary of medical sickness certificate and rest advised"
+}
+`;
+    } else if (templateType === "discharge") {
+      systemPrompt = `
+You are an expert hospital clinical scribe. You analyze consultations or procedural visits and generate an official Discharge & Procedural Summary for hospital ward discharge or day-care/OPD procedures.
+
+RULES:
+- Thorough hospital documentation style.
+- Return ONLY a valid JSON object. No markdown backticks.
+
+Return this exact JSON structure:
+{
+  "templateType": "discharge",
+  "admission_date": "Date of presentation or admission",
+  "discharge_date": "Date of discharge (current date)",
+  "final_diagnosis": "Final primary diagnosis and secondary diagnoses",
+  "procedure_performed": "Procedure or clinical management performed (e.g. 'Conservative medical management', 'Wound dressing', 'OPD Nebulization', etc.)",
+  "hospital_course": "Summary of presenting symptoms, treatment response during the visit, and condition at discharge",
+  "discharge_vitals": "Discharge vitals (BP, Pulse, Temperature, SpO2, Systemic findings)",
+  "discharge_medications": "Complete discharge medication schedule with dosages and timings (1-0-1 format)",
+  "diet_lifestyle_advice": "Specific dietary guidelines, fluid intake, physical rest, and wound care instructions",
+  "emergency_red_flags": "Crucial red-flag warning symptoms requiring immediate return to emergency",
+  "follow_up_instructions": "Date, department, and instructions for next OPD review",
+  "full_summary": "A complete, hospital-grade Discharge Summary document ready to print for hospital records",
+  "what_patient_said": "Presenting symptoms",
+  "what_was_observed": "Discharge examination",
+  "likely_diagnosis": "Final discharge diagnosis",
+  "treatment_plan": "Post-discharge management plan",
+  "medications": "Discharge medications",
+  "quick_summary": "Executive discharge summary"
+}
+`;
+    } else if (templateType === "quick_opd") {
+      systemPrompt = `
+You are an expert outpatient medical scribe in a high-volume Indian clinic (RxNote style). You turn consultations into crisp, ultra-efficient OPD prescription notes with standard Indian dosage timings (1-0-1) and actionable follow-ups.
+
+RULES:
+- Ultra-concise, fast to read, no fluff.
+- Medications MUST use standard timings (e.g. '1-0-1', '1-0-0', '0-0-1', '1-1-1') and meal relation ('After Food' / 'Before Food').
+- Return ONLY a valid JSON object. No markdown backticks.
+
+Return this exact JSON structure:
+{
+  "templateType": "quick_opd",
+  "chief_complaints": [
+    "Complaint 1 with duration (e.g. Fever 101F x 2 days)",
+    "Complaint 2 with duration (e.g. Sore throat x 3 days)"
+  ],
+  "examination": "Concise 1-2 line physical findings, vitals, and systemic checks",
+  "diagnosis": "Crisp clinical diagnosis",
+  "medications_table": [
+    {
+      "name": "Brand / Generic Medicine Name (e.g. Tab Azithromycin 500mg)",
+      "timing": "Standard timing (e.g. '1-0-0' or '1-0-1' or '0-0-1')",
+      "food": "'After Food' or 'Before Food'",
+      "duration": "Duration (e.g. '3 Days', '5 Days')"
+    }
+  ],
+  "instructions": "Simple patient advice (diet, hydration, gargles, rest)",
+  "review_after": "Review duration (e.g. 'Review in 3 days or SOS')",
+  "full_opd_note": "A clean, compact OPD prescription sheet formatted for fast printing",
+  "what_patient_said": "Chief complaints",
+  "what_was_observed": "Examination findings",
+  "likely_diagnosis": "Diagnosis",
+  "treatment_plan": "Treatment and instructions",
+  "medications": "Prescribed medicines with timings",
+  "quick_summary": "10-second OPD review"
+}
+`;
+    } else {
+      // Default: SOAP Note
+      systemPrompt = `
 You are an expert clinical medical scribe. You analyze doctor-patient consultation transcripts and write clear, easy-to-read clinical SOAP notes.
 
 Your job has TWO parts:
@@ -760,6 +891,7 @@ RULES:
 
 Return this exact JSON structure:
 {
+  "templateType": "soap",
   "what_patient_said": "2-3 simple sentences: what the patient complained about and their main symptoms.",
   "what_was_observed": "What the doctor noted during the visit. If not in transcript, mention what would normally be checked.",
   "likely_diagnosis": "Simple 1-2 sentence explanation of what is likely going on with the patient.",
@@ -778,7 +910,13 @@ Return this exact JSON structure:
 }
 
 For suggested_questions: If the doctor did NOT cover: symptom duration, pain scale (1-10), previous episodes, past medical history, current medications, allergies, family history, lifestyle, or relevant tests — list each as a suggested question explaining why it matters. If everything was covered, write ["All key areas were covered in this consultation."].
-        `,
+`;
+    }
+
+    const messages = [
+      {
+        role: "system",
+        content: systemPrompt,
       },
       {
         role: "user",
@@ -789,18 +927,20 @@ Patient Details:
 - Gender: ${patient?.gender || "N/A"}
 - Blood Group: ${patient?.bloodGroup || "N/A"}
 - Status: ${patient?.status || "N/A"}
+- Consultation / Today's Date: ${todayIso}
 
 Consultation Transcript:
 "${transcript}"
 
-Write a clear, simple clinical note and list any important questions the doctor may have missed. Return ONLY the JSON object.
+Format: ${templateType.toUpperCase()}
+Write the requested clinical document. Return ONLY the valid JSON object.
         `,
       },
     ];
 
     const { content: rawContent, model } = await callGeminiChat({
       messages,
-      tag: "SOAP Generation",
+      tag: `${templateType.toUpperCase()} Generation`,
       responseMimeType: "application/json",
     });
 
@@ -810,30 +950,31 @@ Write a clear, simple clinical note and list any important questions the doctor 
     const end = raw.lastIndexOf("}");
 
     if (start === -1 || end === -1) {
-      console.error("❌ [SOAP] AI did not return a valid JSON block:", raw);
-      return res.status(500).json({ error: "AI returned invalid note format", raw });
+      console.error("❌ [Clinical AI] AI did not return a valid JSON block:", raw);
+      return res.status(500).json({ error: "AI returned invalid document format", raw });
     }
 
     let parsed;
     try {
       parsed = JSON.parse(raw.substring(start, end + 1));
     } catch (parseErr) {
-      console.error("❌ [SOAP] JSON parse failed:", parseErr.message, raw.substring(start, end + 1));
+      console.error("❌ [Clinical AI] JSON parse failed:", parseErr.message, raw.substring(start, end + 1));
       return res.status(500).json({
-        error: "Failed to parse clinical note JSON",
+        error: "Failed to parse clinical document JSON",
         detail: parseErr.message,
       });
     }
 
-    // Default structure fallback to prevent missing keys
+    // Default structure fallback ensuring universal backward compatibility
     const noteData = {
-      what_patient_said: parsed.what_patient_said || "No symptoms recorded.",
-      what_was_observed: parsed.what_was_observed || "Clinical examination pending.",
-      likely_diagnosis: parsed.likely_diagnosis || "Evaluation ongoing.",
-      treatment_plan: parsed.treatment_plan || "Standard supportive care.",
-      medications: parsed.medications || "None prescribed yet.",
-      follow_up: parsed.follow_up || "Follow up in 5-7 days if symptoms persist.",
-      warning_signs: Array.isArray(parsed.warning_signs) ? parsed.warning_signs : [],
+      templateType: parsed.templateType || templateType,
+      what_patient_said: parsed.what_patient_said || parsed.clinical_summary || "No symptoms recorded.",
+      what_was_observed: parsed.what_was_observed || parsed.examination || parsed.discharge_vitals || "Clinical examination completed.",
+      likely_diagnosis: parsed.likely_diagnosis || parsed.provisional_diagnosis || parsed.illness_diagnosis || parsed.final_diagnosis || parsed.diagnosis || "Evaluation completed.",
+      treatment_plan: parsed.treatment_plan || parsed.instructions || parsed.diet_lifestyle_advice || "Standard supportive care.",
+      medications: parsed.medications || (Array.isArray(parsed.medications_table) ? parsed.medications_table.map(m => `${m.name} (${m.timing || ''} - ${m.food || ''} x ${m.duration || ''})`).join(", ") : "None prescribed yet."),
+      follow_up: parsed.follow_up || parsed.follow_up_instructions || parsed.review_after || "Follow up as clinically indicated.",
+      warning_signs: Array.isArray(parsed.warning_signs) ? parsed.warning_signs : (parsed.emergency_red_flags ? [parsed.emergency_red_flags] : []),
       suggested_questions: Array.isArray(parsed.suggested_questions) ? parsed.suggested_questions : [],
       quick_summary: parsed.quick_summary || "",
       ...parsed,
@@ -851,8 +992,8 @@ Write a clear, simple clinical note and list any important questions the doctor 
     const soapData = noteData;
 
     const totalElapsed = Date.now() - reqStart;
-    console.log(`🎉 [SOAP] Generated successfully with model "${model}" in ${totalElapsed}ms`);
-    return res.json({ soapNote, soapData, modelUsed: model });
+    console.log(`🎉 [Clinical AI] ${templateType.toUpperCase()} generated successfully with model "${model}" in ${totalElapsed}ms`);
+    return res.json({ soapNote, soapData, templateType: noteData.templateType, modelUsed: model });
   } catch (err) {
     const errorMsg = err.response?.data?.error?.message || err.response?.data || err.message;
     console.error("❌ [SOAP] SOAP generation error:", errorMsg);
@@ -1197,8 +1338,11 @@ export const getMyPatientNotes = async (req, res) => {
         patientNote: { not: null },
       },
       include: {
+        patient: {
+          select: { name: true, age: true, gender: true, bloodGroup: true },
+        },
         doctor: {
-          select: { name: true, specialty: true },
+          select: { name: true, specialty: true, clinicName: true },
         },
       },
       orderBy: { updatedAt: "desc" },

@@ -1,6 +1,6 @@
 import prisma from "../prisma/client.js";
 import { processReminders } from "../utils/reminderCron.js";
-import { validateAppointmentDateTime, normalizeTimeTo24Hour } from "../utils/dateTimeValidator.js";
+import { validateAppointmentDateTime, normalizeTimeTo24Hour, isTimeWithinDoctorTiming } from "../utils/dateTimeValidator.js";
 
 // GET BOOKED SLOTS FOR A SPECIFIC DOCTOR AND DATE
 export const getDoctorBookedSlots = async (req, res) => {
@@ -73,6 +73,24 @@ export const bookAppointmentByPatient = async (req, res) => {
 
     if (!patient) {
       return res.status(404).json({ error: "Patient not found" });
+    }
+
+    // Verify doctor exists and validate against their OPD / Hospital timing
+    const doctor = await prisma.doctor.findUnique({
+      where: { id: Number(doctorId) },
+    });
+
+    if (!doctor) {
+      return res.status(404).json({ error: "Doctor not found" });
+    }
+
+    if (doctor.timing && time) {
+      const withinTiming = isTimeWithinDoctorTiming(time, doctor.timing);
+      if (!withinTiming) {
+        return res.status(400).json({
+          error: `Selected time (${time}) is outside Dr. ${doctor.name}'s OPD timing (${doctor.timing}). Please select a time within their working hours.`,
+        });
+      }
     }
 
     const dayStart = new Date(date);

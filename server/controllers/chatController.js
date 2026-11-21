@@ -30,6 +30,8 @@ const formatDoctor = (doctor) =>
     specialty: doctor.specialty,
     mobile: doctor.mobile,
     experience: doctor.experience,
+    clinicName: doctor.clinicName,
+    timing: doctor.timing || "09:00 AM - 08:00 PM",
   };
 
 const roots = [

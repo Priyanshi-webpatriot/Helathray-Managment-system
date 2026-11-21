@@ -26,6 +26,11 @@ import {
   FaCommentMedical,
   FaUserMd,
   FaNotesMedical,
+  FaBolt,
+  FaPaperPlane,
+  FaCertificate,
+  FaHospital,
+  FaFileAlt,
 } from "react-icons/fa";
 import { BsClockHistory, BsFileEarmarkMedical } from "react-icons/bs";
 import { toast } from "react-toastify";
@@ -90,11 +95,28 @@ const parseNotePreview = (patientNote = "", soapNote = "") => {
   };
 };
 
+const getNoteTemplateMeta = (note) => {
+  if (!note) return null;
+  const raw = note.finalNote || note.soapNote;
+  if (!raw) return null;
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    const type = parsed?.templateType;
+    if (type === "quick_opd") return { label: "Quick OPD", Icon: FaBolt, bg: "#fef3c7", text: "#b45309" };
+    if (type === "referral") return { label: "Referral", Icon: FaPaperPlane, bg: "#ede9fe", text: "#6d28d9" };
+    if (type === "certificate") return { label: "Sickness Cert", Icon: FaCertificate, bg: "#d1fae5", text: "#065f46" };
+    if (type === "discharge") return { label: "Discharge", Icon: FaHospital, bg: "#fce7f3", text: "#be185d" };
+    return { label: "SOAP Note", Icon: FaFileAlt, bg: "#e0f2fe", text: "#0369a1" };
+  } catch {
+    return null;
+  }
+};
+
 const renderFormattedLine = (line, idx) => {
   const trimmed = line.trim();
   if (!trimmed) return null;
 
-  if (/^From\b|^📋\s*Note from/i.test(trimmed)) {
+  if (/^From\b|^Note from/i.test(trimmed)) {
     return (
       <div key={idx} className="pnw-note-from">
         <FaUserMd />
@@ -142,6 +164,333 @@ const renderFormattedLine = (line, idx) => {
     </p>
   );
 };
+
+function printDoctorConsultation(note, activeTab, parsedSoap) {
+  if (!note) return;
+  const pat = note.patient || {};
+  const doc = note.doctor || {};
+  const patName = pat.name || parsedSoap?._patient?.name || parsedSoap?.patient_name || "Patient";
+  const docName = doc.name ? (doc.name.startsWith("Dr") ? doc.name : `Dr. ${doc.name}`) : "Attending Physician";
+  const clinic = doc.clinicName || "Healthray Multi-Specialty Clinic";
+  const dateStr = new Date(note.createdAt).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  const win = window.open("", "_blank", "width=850,height=900");
+  if (!win) {
+    window.print();
+    return;
+  }
+
+  let title = "Clinical Consultation Record";
+  let bodyHtml = "";
+
+  if (activeTab === "summary") {
+    title = `Patient Care Summary - ${patName}`;
+    bodyHtml = `
+      <div class="hdr" style="border-bottom: 2px solid #0d9488; padding-bottom: 12px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+          <h1 style="color: #0f766e; margin: 0; font-size: 20px; text-transform: uppercase;">${clinic}</h1>
+          <p style="margin: 4px 0 0; font-size: 13px; color: #0d9488; font-weight: 700;">Patient Visit &amp; Care Instructions Summary</p>
+        </div>
+        <div style="text-align: right;">
+          <p style="margin: 0; font-size: 12px; color: #64748b;"><strong>Visit Date:</strong> ${dateStr}</p>
+          <p style="margin: 3px 0 0; font-size: 12px; color: #64748b;"><strong>Doctor:</strong> ${docName} (${doc.specialty || "General Medicine"})</p>
+        </div>
+      </div>
+      <div class="box" style="margin-top: 16px;">
+        <p><strong>Patient:</strong> ${patName} | <strong>Age/Gender:</strong> ${pat.age || "—"} / ${pat.gender || "—"} | <strong>Blood Group:</strong> ${pat.bloodGroup || "—"}</p>
+      </div>
+      <div class="box">
+        <div class="box-title">Doctor's Care Instructions &amp; Patient Advice</div>
+        <div style="font-size: 13.5px; line-height: 1.8; color: #1e293b; white-space: pre-line; margin-top: 8px;">
+          ${note.patientNote || "No visit summary available."}
+        </div>
+      </div>
+      <div class="sign-area" style="margin-top: 60px; display: flex; justify-content: flex-end;">
+        <div style="border-top: 1px solid #0f172a; width: 220px; text-align: center; padding-top: 8px;">
+          <strong>${docName}</strong><br/>
+          <span style="font-size: 11px; color: #64748b;">Attending Doctor Signature</span>
+        </div>
+      </div>
+    `;
+  } else if (activeTab === "transcript") {
+    title = `Consultation Transcript - ${patName}`;
+    bodyHtml = `
+      <div class="hdr" style="border-bottom: 2px solid #6366f1; padding-bottom: 12px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+          <h1 style="color: #4f46e5; margin: 0; font-size: 20px; text-transform: uppercase;">${clinic}</h1>
+          <p style="margin: 4px 0 0; font-size: 13px; color: #6366f1; font-weight: 700;">Verified Clinical Consultation Dialogue</p>
+        </div>
+        <div style="text-align: right;">
+          <p style="margin: 0; font-size: 12px; color: #64748b;"><strong>Date:</strong> ${dateStr}</p>
+          <p style="margin: 3px 0 0; font-size: 12px; color: #64748b;"><strong>Doctor:</strong> ${docName}</p>
+        </div>
+      </div>
+      <div class="box" style="margin-top: 16px;">
+        <p><strong>Patient:</strong> ${patName} | <strong>Age/Gender:</strong> ${pat.age || "—"} / ${pat.gender || "—"}</p>
+      </div>
+      <div class="box">
+        <div class="box-title">Full Consultation Dialogue Transcript</div>
+        <div style="font-size: 13px; line-height: 1.7; color: #1e293b; white-space: pre-line; margin-top: 8px;">
+          ${note.transcript || "No transcript available."}
+        </div>
+      </div>
+      <div class="sign-area" style="margin-top: 60px; display: flex; justify-content: flex-end;">
+        <div style="border-top: 1px solid #0f172a; width: 220px; text-align: center; padding-top: 8px;">
+          <strong>${docName}</strong><br/>
+          <span style="font-size: 11px; color: #64748b;">Verified Clinical Dialogue Record</span>
+        </div>
+      </div>
+    `;
+  } else {
+    // Clinical Format (SOAP / Referral / Certificate / Quick OPD / Discharge)
+    const parsed = parsedSoap || {};
+    const type = parsed?.templateType || "soap";
+
+    if (type === "certificate") {
+      title = `Medical Sickness Certificate - ${patName}`;
+      bodyHtml = `
+        <div class="hdr" style="border-bottom: 2px solid #10b981; padding-bottom: 12px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end;">
+          <div>
+            <h1 style="color: #065f46; margin: 0; font-size: 20px; text-transform: uppercase;">${clinic}</h1>
+            <p style="color: #047857; margin: 4px 0 0; font-size: 13px; font-weight: 700;">Official Medical Sickness &amp; Fitness Certificate</p>
+          </div>
+          <div style="text-align: right;">
+            <p style="margin: 0; font-size: 12px; color: #64748b;"><strong>Certificate Date:</strong> ${dateStr}</p>
+            <p style="margin: 3px 0 0; font-size: 12px; color: #64748b;"><strong>Doctor:</strong> ${docName}</p>
+          </div>
+        </div>
+        <div style="margin: 28px 0; font-size: 14.5px; line-height: 1.8; color: #1e293b;">
+          <p>This is to certify that <strong>${parsed.patient_name || patName}</strong>, Age: ${pat.age || "—"}, Gender: ${pat.gender || "—"}, has been clinically examined and verified to be suffering from <strong>${parsed.illness_diagnosis || parsed.likely_diagnosis || "Acute medical illness"}</strong>.</p>
+          <p>In view of the clinical evaluation, the patient is advised medical rest and absence from duties / classes for a duration of <strong>${parsed.rest_days_recommended || "3 Days"}</strong>, effective from <strong>${parsed.rest_from_date || dateStr}</strong> to <strong>${parsed.rest_to_date || "as advised"}</strong>.</p>
+          <p><strong>Fitness Status:</strong> ${parsed.fitness_status || "Unfit for occupational / academic duties during the stated rest period."}</p>
+          <p><strong>Clinical Remarks &amp; Advice:</strong> ${parsed.doctor_remarks || parsed.treatment_plan || "Strict medical rest and adherence to prescribed medications advised."}</p>
+        </div>
+        <div class="sign-area" style="margin-top: 60px; display: flex; justify-content: flex-end;">
+          <div style="border-top: 1.5px solid #065f46; width: 220px; text-align: center; padding-top: 8px;">
+            <strong style="color: #065f46; font-size: 13px;">${docName}</strong><br/>
+            <span style="font-size: 11px; color: #64748b;">Authorized Medical Officer (Seal &amp; Signature)</span>
+          </div>
+        </div>
+      `;
+    } else if (type === "referral") {
+      title = `Specialist Referral Letter - ${patName}`;
+      bodyHtml = `
+        <div class="hdr" style="border-bottom: 2px solid #8b5cf6; padding-bottom: 12px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end;">
+          <div>
+            <h1 style="color: #6d28d9; margin: 0; font-size: 20px; text-transform: uppercase;">${clinic}</h1>
+            <p style="color: #7c3aed; margin: 4px 0 0; font-size: 13px; font-weight: 700;">Specialist Clinical Referral Letter</p>
+          </div>
+          <div style="text-align: right;">
+            <p style="margin: 0; font-size: 12px; color: #64748b;"><strong>Date:</strong> ${dateStr}</p>
+            <p style="margin: 3px 0 0; font-size: 12px; color: #b91c1c; font-weight: 700;">Priority: ${parsed.referral_urgency || "Routine"}</p>
+          </div>
+        </div>
+        <div class="box" style="margin-top: 18px;">
+          <p><strong>To:</strong> ${parsed.recipient_specialty || "Specialist Consultant"}</p>
+          <p><strong>Patient:</strong> ${patName} | <strong>Age/Gender:</strong> ${pat.age || "—"} / ${pat.gender || "—"}</p>
+          <p><strong>Reason for Referral:</strong> ${parsed.referral_reason || "Specialist evaluation and requested management."}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Clinical Summary &amp; Presentation</div>
+          <p>${parsed.clinical_summary || parsed.what_patient_said || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Investigations &amp; Current Medications</div>
+          <p><strong>Investigations Done:</strong> ${parsed.investigations_done || parsed.what_was_observed || "—"}</p>
+          <p><strong>Current Active Medications:</strong> ${parsed.current_medications || parsed.medications || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Suspected Diagnosis &amp; Specific Questions</div>
+          <p><strong>Provisional Diagnosis:</strong> ${parsed.provisional_diagnosis || parsed.likely_diagnosis || "—"}</p>
+          <p><strong>Questions for Consultant:</strong> ${parsed.specific_questions || "Kindly evaluate and advise on definitive management."}</p>
+        </div>
+        <div class="sign-area" style="margin-top: 50px; display: flex; justify-content: flex-end;">
+          <div style="border-top: 1px solid #0f172a; width: 220px; text-align: center; padding-top: 8px;">
+            <strong>${docName}</strong><br/>
+            <span style="font-size: 11px; color: #64748b;">Referring Medical Practitioner</span>
+          </div>
+        </div>
+      `;
+    } else if (type === "quick_opd") {
+      title = `OPD Prescription - ${patName}`;
+      const medRows = Array.isArray(parsed.medications_table) && parsed.medications_table.length > 0
+        ? parsed.medications_table.map((m, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td><strong>${m.name}</strong></td>
+              <td><span class="badge">${m.timing || "1-0-1"}</span></td>
+              <td>${m.food || "After Food"}</td>
+              <td>${m.duration || "—"}</td>
+            </tr>
+          `).join("")
+        : `<tr><td colspan="5">${parsed.medications || "No medications"}</td></tr>`;
+
+      const compList = Array.isArray(parsed.chief_complaints) && parsed.chief_complaints.length > 0
+        ? parsed.chief_complaints.map((c) => `<li>${c}</li>`).join("")
+        : `<li>${parsed.what_patient_said || "—"}</li>`;
+
+      bodyHtml = `
+        <div class="hdr" style="border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end;">
+          <div>
+            <h1 style="color: #0369a1; margin: 0; font-size: 20px;">${clinic}</h1>
+            <p style="margin: 4px 0 0; font-size: 13px; color: #64748b;">Outpatient Department (OPD) Prescription</p>
+          </div>
+          <div style="text-align: right;">
+            <p style="margin: 0; font-size: 12px;"><strong>Date:</strong> ${dateStr}</p>
+            <p style="margin: 3px 0 0; font-size: 12px;"><strong>Doctor:</strong> ${docName} (${doc.specialty || "OPD"})</p>
+          </div>
+        </div>
+        <div class="box" style="margin-top: 16px;">
+          <p><strong>Patient:</strong> ${patName} | <strong>Age/Gender:</strong> ${pat.age || "—"} / ${pat.gender || "—"} | <strong>Blood Group:</strong> ${pat.bloodGroup || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Chief Complaints</div>
+          <ul style="margin: 4px 0 0 16px; padding: 0;">${compList}</ul>
+        </div>
+        <div class="box">
+          <div class="box-title">Diagnosis &amp; Examination</div>
+          <p><strong>Diagnosis:</strong> ${parsed.diagnosis || parsed.likely_diagnosis || "—"}</p>
+          <p><strong>Examination / Vitals:</strong> ${parsed.examination || parsed.what_was_observed || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Rx - Prescribed Medications (1-0-1 Timings)</div>
+          <table>
+            <thead>
+              <tr><th>#</th><th>Medicine</th><th>Timing</th><th>Meal Relation</th><th>Duration</th></tr>
+            </thead>
+            <tbody>${medRows}</tbody>
+          </table>
+        </div>
+        <div class="box">
+          <div class="box-title">Patient Advice &amp; Next Review</div>
+          <p><strong>Advice:</strong> ${parsed.instructions || parsed.treatment_plan || "—"}</p>
+          <p><strong>Review:</strong> ${parsed.review_after || parsed.follow_up || "—"}</p>
+        </div>
+        <div class="sign-area" style="margin-top: 50px; display: flex; justify-content: flex-end;">
+          <div style="border-top: 1px solid #0f172a; width: 220px; text-align: center; padding-top: 8px;">
+            <strong>${docName}</strong><br/>
+            <span style="font-size: 11px; color: #64748b;">Attending Doctor Signature</span>
+          </div>
+        </div>
+      `;
+    } else if (type === "discharge") {
+      title = `Discharge Summary - ${patName}`;
+      bodyHtml = `
+        <div class="hdr" style="border-bottom: 2px solid #ec4899; padding-bottom: 12px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end;">
+          <div>
+            <h1 style="color: #be185d; margin: 0; font-size: 20px;">${clinic}</h1>
+            <p style="margin: 4px 0 0; font-size: 13px; color: #64748b;">Hospital Discharge &amp; Procedural Summary</p>
+          </div>
+          <div style="text-align: right;">
+            <p style="margin: 0; font-size: 12px;"><strong>Admission:</strong> ${parsed.admission_date || "—"}</p>
+            <p style="margin: 3px 0 0; font-size: 12px;"><strong>Discharge:</strong> ${parsed.discharge_date || dateStr}</p>
+          </div>
+        </div>
+        <div class="box" style="margin-top: 16px;">
+          <p><strong>Patient:</strong> ${patName} | <strong>Age/Gender:</strong> ${pat.age || "—"} / ${pat.gender || "—"}</p>
+          <p><strong>Final Diagnosis:</strong> ${parsed.final_diagnosis || parsed.likely_diagnosis || "—"}</p>
+          <p><strong>Procedure / Management:</strong> ${parsed.procedure_performed || "Conservative management"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Hospital Course &amp; Response to Treatment</div>
+          <p>${parsed.hospital_course || parsed.what_patient_said || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Discharge Vitals &amp; Medications</div>
+          <p><strong>Vitals at Discharge:</strong> ${parsed.discharge_vitals || parsed.what_was_observed || "—"}</p>
+          <p><strong>Discharge Medications:</strong> ${parsed.discharge_medications || parsed.medications || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Diet, Advice &amp; Emergency Warnings</div>
+          <p><strong>Diet / Advice:</strong> ${parsed.diet_lifestyle_advice || parsed.treatment_plan || "—"}</p>
+          <p style="color: #b91c1c;"><strong>Emergency Red Flags:</strong> ${parsed.emergency_red_flags || "Return immediately in case of severe pain, high fever, or breathlessness."}</p>
+          <p><strong>Follow-up:</strong> ${parsed.follow_up_instructions || parsed.follow_up || "—"}</p>
+        </div>
+        <div class="sign-area" style="margin-top: 50px; display: flex; justify-content: flex-end;">
+          <div style="border-top: 1px solid #0f172a; width: 220px; text-align: center; padding-top: 8px;">
+            <strong>${docName}</strong><br/>
+            <span style="font-size: 11px; color: #64748b;">Consultant In-Charge</span>
+          </div>
+        </div>
+      `;
+    } else {
+      title = `Clinical Consultation Record - ${patName}`;
+      bodyHtml = `
+        <div class="hdr" style="border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end;">
+          <div>
+            <h1 style="color: #0369a1; margin: 0; font-size: 20px;">${clinic}</h1>
+            <p style="margin: 4px 0 0; font-size: 13px; color: #64748b;">Clinical Consultation Record</p>
+          </div>
+          <div style="text-align: right;">
+            <p style="margin: 0; font-size: 12px;"><strong>Date:</strong> ${dateStr}</p>
+            <p style="margin: 3px 0 0; font-size: 12px;"><strong>Doctor:</strong> ${docName}</p>
+          </div>
+        </div>
+        <div class="box" style="margin-top: 16px;">
+          <p><strong>Patient:</strong> ${patName} | <strong>Age/Gender:</strong> ${pat.age || "—"} / ${pat.gender || "—"}</p>
+          <p><strong>Clinical Summary:</strong> ${parsed.quick_summary || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Subjective &amp; Clinical Examination</div>
+          <p><strong>Symptoms:</strong> ${parsed.what_patient_said || "—"}</p>
+          <p><strong>Examination:</strong> ${parsed.what_was_observed || "—"}</p>
+        </div>
+        <div class="box">
+          <div class="box-title">Diagnosis &amp; Treatment</div>
+          <p><strong>Diagnosis:</strong> ${parsed.likely_diagnosis || "—"}</p>
+          <p><strong>Treatment Plan:</strong> ${parsed.treatment_plan || "—"}</p>
+          <p><strong>Prescribed Medications:</strong> ${parsed.medications || "—"}</p>
+          <p><strong>Follow-up:</strong> ${parsed.follow_up || "—"}</p>
+        </div>
+        <div class="sign-area" style="margin-top: 50px; display: flex; justify-content: flex-end;">
+          <div style="border-top: 1px solid #0f172a; width: 220px; text-align: center; padding-top: 8px;">
+            <strong>${docName}</strong><br/>
+            <span style="font-size: 11px; color: #64748b;">Attending Doctor Signature</span>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>${title}</title>
+        <style>
+          @page { margin: 15mm; size: A4; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; line-height: 1.5; margin: 0; padding: 24px; font-size: 13px; }
+          .hdr { padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end; }
+          .box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; background: #fafafa; }
+          .box-title { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #0284c7; margin-bottom: 4px; }
+          .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #fef3c7; color: #b45309; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12.5px; }
+          th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; }
+          th { background: #f1f5f9; font-weight: 700; }
+          .sign-area { margin-top: 50px; display: flex; justify-content: flex-end; }
+          .sign-line { border-top: 1px solid #0f172a; width: 220px; text-align: center; padding-top: 8px; font-weight: 700; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        ${bodyHtml}
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.focus();
+              window.print();
+            }, 250);
+          };
+        </script>
+      </body>
+    </html>
+  `);
+  win.document.close();
+}
 
 export default function DoctorPatientHistory() {
   const navigate = useNavigate();
@@ -267,8 +616,9 @@ export default function DoctorPatientHistory() {
     setMobileDetailOpen(true);
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = (tabToPrint = activeTab) => {
+    if (!activeNote) return;
+    printDoctorConsultation(activeNote, tabToPrint, parsedSoap);
   };
 
   const handleCopy = () => {
@@ -714,7 +1064,28 @@ export default function DoctorPatientHistory() {
                         {pat.status || "ACTIVE"}
                       </span>
 
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                        {(() => {
+                          const tmpl = getNoteTemplateMeta(note);
+                          return tmpl ? (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontSize: "11px",
+                                fontWeight: "700",
+                                padding: "2px 7px",
+                                borderRadius: "5px",
+                                background: tmpl.bg,
+                                color: tmpl.text,
+                              }}
+                            >
+                              <tmpl.Icon style={{ fontSize: "10px" }} />
+                              {tmpl.label}
+                            </span>
+                          ) : null;
+                        })()}
                         {hasMeds && (
                           <span className="pnw-rx-tag">
                             <FaPills />
@@ -960,6 +1331,9 @@ export default function DoctorPatientHistory() {
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <span
                       style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
                         fontSize: "11px",
                         fontWeight: "800",
                         padding: "3px 8px",
@@ -970,7 +1344,7 @@ export default function DoctorPatientHistory() {
                         letterSpacing: "0.5px",
                       }}
                     >
-                      ⚠️ Draft Consultation
+                      <FiAlertCircle /> Draft Consultation
                     </span>
                     <span style={{ fontSize: "13px", color: "#92400e" }}>
                       This consultation note is an unapproved draft. It has <strong>not</strong> been signed or synced to the patient portal.
@@ -1099,6 +1473,54 @@ export default function DoctorPatientHistory() {
                 {/* 1. PATIENT TAKE-HOME SUMMARY VIEW */}
                 {activeTab === "summary" && (
                   <>
+                    {/* Prompt to View / Print Official Document */}
+                    {parsedSoap?.templateType && parsedSoap.templateType !== "soap" && (
+                      <div
+                        className="pnw-doc-banner-cta"
+                        onClick={() => setActiveTab("soap")}
+                        title="Click to view and print official certificate or letter"
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          <span style={{ fontSize: "22px", display: "inline-flex", alignItems: "center", color: getNoteTemplateMeta(activeNote)?.text || "#0284c7" }}>
+                            {(() => {
+                              const m = getNoteTemplateMeta(activeNote);
+                              return m ? <m.Icon /> : <FaFileAlt />;
+                            })()}
+                          </span>
+                          <div>
+                            <div style={{ fontWeight: "800", fontSize: "13px", color: "#0369a1" }}>
+                              Official {getNoteTemplateMeta(activeNote)?.label || "Medical Document"} Available
+                            </div>
+                            <div style={{ fontSize: "12px", color: "#475569" }}>
+                              Click to view or print the official signed certificate, letter, or prescription.
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePrint("soap");
+                          }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            padding: "6px 12px",
+                            background: "#ffffff",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            fontWeight: "700",
+                            color: "#0369a1",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <FiPrinter /> Print Official Copy
+                        </button>
+                      </div>
+                    )}
+
                     {activeNote.patientNote ? (
                       <div className="pnw-note-content">
                         {activeNote.patientNote
@@ -1118,6 +1540,77 @@ export default function DoctorPatientHistory() {
                   <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                     {parsedSoap ? (
                       <>
+                        {/* Template Type & Format Banner */}
+                        {parsedSoap.templateType && parsedSoap.templateType !== "soap" ? (
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "10px 16px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span style={{ fontSize: "12px", fontWeight: "800", color: "#64748b", textTransform: "uppercase" }}>Clinical Format:</span>
+                              {(() => {
+                                const m = getNoteTemplateMeta(activeNote);
+                                if (!m) return null;
+                                return (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "12px", fontWeight: "700", padding: "3px 10px", borderRadius: "20px", background: m.bg, color: m.text }}>
+                                    <m.Icon /> {m.label}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                              {parsedSoap.recipient_specialty && (
+                                <span style={{ fontSize: "12px", color: "#6d28d9", fontWeight: "600" }}>
+                                  To: {parsedSoap.recipient_specialty}
+                                </span>
+                              )}
+                              {parsedSoap.rest_days_recommended && (
+                                <span style={{ fontSize: "12px", color: "#065f46", fontWeight: "700" }}>
+                                  Rest Advised: {parsedSoap.rest_days_recommended}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handlePrint("soap")}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                  padding: "4px 10px",
+                                  background: "#ffffff",
+                                  border: "1px solid #cbd5e1",
+                                  borderRadius: "6px",
+                                  fontSize: "11.5px",
+                                  fontWeight: "700",
+                                  color: "#0369a1",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <FiPrinter /> Print Document
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                            <button
+                              type="button"
+                              onClick={() => handlePrint("soap")}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "5px",
+                                padding: "4px 12px",
+                                background: "#ffffff",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                fontWeight: "700",
+                                color: "#0369a1",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <FiPrinter /> Print Official SOAP Record
+                            </button>
+                          </div>
+                        )}
+
                         {parsedSoap.quick_summary && (
                           <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px 16px" }}>
                             <h4 style={{ margin: "0 0 6px 0", fontSize: "13px", fontWeight: "800", color: "#0284c7", textTransform: "uppercase" }}>
@@ -1176,9 +1669,32 @@ export default function DoctorPatientHistory() {
                             <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#8b5cf6", fontWeight: "700", fontSize: "12px", textTransform: "uppercase", marginBottom: "8px" }}>
                               <FaPills /> Prescribed Medications (Rx)
                             </div>
-                            <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.5", color: "#334155", whiteSpace: "pre-line" }}>
-                              {parsedSoap.medications || "No medications noted."}
-                            </p>
+                            {Array.isArray(parsedSoap.medications_table) && parsedSoap.medications_table.length > 0 ? (
+                              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                                <thead>
+                                  <tr style={{ background: "#f8fafc", color: "#64748b", textAlign: "left" }}>
+                                    <th style={{ padding: "4px 6px" }}>Drug</th>
+                                    <th style={{ padding: "4px 6px" }}>Timing</th>
+                                    <th style={{ padding: "4px 6px" }}>Food</th>
+                                    <th style={{ padding: "4px 6px" }}>Days</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {parsedSoap.medications_table.map((m, i) => (
+                                    <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                      <td style={{ padding: "6px", fontWeight: "700", color: "#0f172a" }}>{m.name}</td>
+                                      <td style={{ padding: "6px", color: "#b45309", fontWeight: "700" }}>{m.timing}</td>
+                                      <td style={{ padding: "6px", color: "#0284c7" }}>{m.food}</td>
+                                      <td style={{ padding: "6px", color: "#475569" }}>{m.duration}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : (
+                              <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.5", color: "#334155", whiteSpace: "pre-line" }}>
+                                {parsedSoap.medications || "No medications noted."}
+                              </p>
+                            )}
                           </div>
                         </div>
 

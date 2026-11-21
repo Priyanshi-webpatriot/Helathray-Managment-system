@@ -115,4 +115,83 @@ export const normalizeTimeTo24Hour = (timeStr) => {
   return `${String(parsed.hours).padStart(2, "0")}:${String(parsed.minutes).padStart(2, "0")}`;
 };
 
+/**
+ * Parses doctor timing string into hour/min ranges (e.g. "09:00 AM - 08:00 PM" -> [{ startHour: 9, startMin: 0, endHour: 20, endMin: 0 }])
+ * @param {string} timingStr
+ * @returns {Array<{ startHour: number, startMin: number, endHour: number, endMin: number }>}
+ */
+export const parseDoctorTimingRanges = (timingStr) => {
+  if (!timingStr || typeof timingStr !== "string") {
+    return [{ startHour: 9, startMin: 0, endHour: 20, endMin: 0 }];
+  }
+  const clean = timingStr.trim();
+  if (/24\s*hours|24x7|24\/7/i.test(clean)) {
+    return [{ startHour: 0, startMin: 0, endHour: 23, endMin: 59 }];
+  }
+
+  const parts = clean.split(/[,;&]|\band\b/i).map((s) => s.trim()).filter(Boolean);
+  const ranges = [];
+
+  for (const part of parts) {
+    const timeRegex = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/gi;
+    const matches = [...part.matchAll(timeRegex)];
+    if (matches.length >= 2) {
+      const parseMatch = (m, fallbackAmPm) => {
+        let hour = parseInt(m[1], 10);
+        let min = m[2] ? parseInt(m[2], 10) : 0;
+        let mod = m[3] ? m[3].toUpperCase() : fallbackAmPm;
+        if (mod === "PM" && hour < 12) hour += 12;
+        if (mod === "AM" && hour === 12) hour = 0;
+        return { hour, min };
+      };
+      const endMatch = matches[matches.length - 1];
+      const startMatch = matches[0];
+      const endMod = endMatch[3]
+        ? endMatch[3].toUpperCase()
+        : parseInt(endMatch[1], 10) >= 12
+        ? "PM"
+        : "PM";
+      const end = parseMatch(endMatch, endMod);
+      const start = parseMatch(
+        startMatch,
+        startMatch[3] ? startMatch[3].toUpperCase() : parseInt(startMatch[1], 10) < 8 ? "PM" : "AM"
+      );
+      ranges.push({ startHour: start.hour, startMin: start.min, endHour: end.hour, endMin: end.min });
+    }
+  }
+
+  if (ranges.length === 0) {
+    return [{ startHour: 9, startMin: 0, endHour: 20, endMin: 0 }];
+  }
+  return ranges;
+};
+
+/**
+ * Checks if a given time slot falls within a doctor's timing
+ * @param {string} timeStr
+ * @param {string} doctorTimingStr
+ * @returns {boolean}
+ */
+export const isTimeWithinDoctorTiming = (timeStr, doctorTimingStr) => {
+  if (!timeStr) return true;
+  if (!doctorTimingStr || typeof doctorTimingStr !== "string") return true;
+  const clean = doctorTimingStr.trim();
+  if (/24\s*hours|24x7|24\/7/i.test(clean)) return true;
+
+  const parsedTarget = parseTimeSlot(timeStr);
+  if (!parsedTarget) return true;
+
+  const targetMinutes = parsedTarget.hours * 60 + parsedTarget.minutes;
+  const ranges = parseDoctorTimingRanges(clean);
+
+  for (const r of ranges) {
+    const startMinutes = r.startHour * 60 + r.startMin;
+    const endMinutes = r.endHour * 60 + r.endMin;
+    if (targetMinutes >= startMinutes && targetMinutes <= endMinutes) {
+      return true;
+    }
+  }
+  return false;
+};
+
 
