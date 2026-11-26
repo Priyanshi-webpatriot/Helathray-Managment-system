@@ -1,5 +1,9 @@
 import prisma from "../prisma/client.js";
 import axios from "axios";
+import { sanitizeTextForAi, sanitizePatientForAi } from "../utils/phiSanitizer.js";
+import { logAuditEvent } from "../utils/auditLogger.js";
+import { encrypt, decrypt, decryptNote, decryptNotesList, decryptMedicalRecord } from "../utils/cryptoUtil.js";
+import { evaluatePatientStatus } from "../utils/patientStatusHelper.js";
 
 // ==========================================
 // GEMINI DIRECT CALLERS WITH RESILIENT FALLBACK & RETRY
@@ -108,7 +112,7 @@ async function uploadMediaToGeminiFiles(audioBuffer, mimeType, apiKey) {
     throw new Error("Gemini File API processing failed for uploaded media");
   }
 
-  return fileObj.uri;
+  return { uri: fileObj.uri, fileName };
 }
 
 /**
@@ -122,13 +126,15 @@ async function callGeminiAudioTranscription(audioBuffer, mimeType) {
 
   const useFilesApi = audioBuffer.length > 15 * 1024 * 1024;
   let mediaPart;
+  let uploadedFileName = null;
   if (useFilesApi) {
     console.log(`📤 [Gemini Audio Transcribe] File is ${(audioBuffer.length / (1024 * 1024)).toFixed(1)} MB (>15 MB), using Gemini Files API...`);
-    const fileUri = await uploadMediaToGeminiFiles(audioBuffer, mimeType, apiKey);
+    const fileResult = await uploadMediaToGeminiFiles(audioBuffer, mimeType, apiKey);
+    uploadedFileName = fileResult.fileName;
     mediaPart = {
       file_data: {
         mime_type: mimeType,
-        file_uri: fileUri,
+        file_uri: fileResult.uri,
       },
     };
   } else {
@@ -148,76 +154,90 @@ async function callGeminiAudioTranscription(audioBuffer, mimeType) {
   const PROBE_TIMEOUT = 25000;  // 25s — fast fail
   const FULL_TIMEOUT = 180000; // 180s — full audio processing
 
-  for (let pass = 0; pass < maxPasses; pass++) {
-    for (let i = 0; i < UNIQUE_AUDIO_MODELS.length; i++) {
-      const model = UNIQUE_AUDIO_MODELS[i];
-      const startTime = Date.now();
-      const timeoutMs = pass === 0 ? PROBE_TIMEOUT : FULL_TIMEOUT;
-      console.log(
-        `🎙️ [Gemini Audio Transcribe] (Pass ${pass + 1}/${maxPasses}) Trying model "${model}" [timeout: ${timeoutMs / 1000}s]...`
-      );
+  try {
+    for (let pass = 0; pass < maxPasses; pass++) {
+      for (let i = 0; i < UNIQUE_AUDIO_MODELS.length; i++) {
+        const model = UNIQUE_AUDIO_MODELS[i];
+        const startTime = Date.now();
+        const timeoutMs = pass === 0 ? PROBE_TIMEOUT : FULL_TIMEOUT;
+        console.log(
+          `🎙️ [Gemini Audio Transcribe] (Pass ${pass + 1}/${maxPasses}) Trying model "${model}" [timeout: ${timeoutMs / 1000}s]...`
+        );
 
-      try {
-        const response = await axios.post(
-          `${GEMINI_NATIVE_BASE}/${model}:generateContent?key=${apiKey}`,
-          {
-            contents: [
-              {
-                parts: [
-                  mediaPart,
-                  {
-                    text: `Transcribe this doctor-patient medical consultation recording accurately word-for-word from start to finish.
+        try {
+          const response = await axios.post(
+            `${GEMINI_NATIVE_BASE}/${model}:generateContent?key=${apiKey}`,
+            {
+              contents: [
+                {
+                  parts: [
+                    mediaPart,
+                    {
+                      text: `Transcribe this doctor-patient medical consultation recording accurately word-for-word from start to finish.
 Preserve all spoken words, medical terms, medication names, dosages, and numbers exactly as spoken.
 Listen carefully to voice differences, pauses, and clinical context to separate Doctor and Patient turns.
 Format each speaker turn on a new line starting with "Doctor:" or "Patient:".
 Never merge a question and its answer, or a Doctor statement and Patient response, into the same line.
 If the recording is silent or unclear or contains no intelligible words, return EXACTLY: [UNCLEAR_AUDIO]`,
-                  },
-                ],
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                temperature: 0,
               },
-            ],
-            generationConfig: {
-              temperature: 0,
             },
-          },
-          {
-            headers: { "Content-Type": "application/json" },
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity,
-            timeout: timeoutMs,
+            {
+              headers: { "Content-Type": "application/json" },
+              maxContentLength: Infinity,
+              maxBodyLength: Infinity,
+              timeout: timeoutMs,
+            }
+          );
+
+          const elapsed = Date.now() - startTime;
+          const text = (
+            response.data?.candidates?.[0]?.content?.parts?.[0]?.text || ""
+          ).trim();
+
+          console.log(
+            `✅ [Gemini Audio Transcribe] Model "${model}" responded in ${elapsed}ms | Length: ${text.length} chars`
+          );
+
+          return { text, model, elapsed };
+        } catch (err) {
+          const elapsed = Date.now() - startTime;
+          lastError = err;
+          const status = err.response?.status || "NO_STATUS";
+          const apiMsg = err.response?.data?.error?.message || err.message;
+
+          console.warn(
+            `⚠️ [Gemini Audio Transcribe] Model "${model}" failed after ${elapsed}ms (Status ${status}): ${apiMsg}`
+          );
+
+          if (status === 503 || status === 429) {
+            console.log(`⏳ [Gemini Audio Transcribe] Brief pause (1.5s) to recover from server demand spike...`);
+            await new Promise((r) => setTimeout(r, 1500));
           }
-        );
-
-        const elapsed = Date.now() - startTime;
-        const text = (
-          response.data?.candidates?.[0]?.content?.parts?.[0]?.text || ""
-        ).trim();
-
-        console.log(
-          `✅ [Gemini Audio Transcribe] Model "${model}" responded in ${elapsed}ms | Length: ${text.length} chars`
-        );
-
-        return { text, model, elapsed };
-      } catch (err) {
-        const elapsed = Date.now() - startTime;
-        lastError = err;
-        const status = err.response?.status || "NO_STATUS";
-        const apiMsg = err.response?.data?.error?.message || err.message;
-
-        console.warn(
-          `⚠️ [Gemini Audio Transcribe] Model "${model}" failed after ${elapsed}ms (Status ${status}): ${apiMsg}`
-        );
-
-        if (status === 503 || status === 429) {
-          console.log(`⏳ [Gemini Audio Transcribe] Brief pause (1.5s) to recover from server demand spike...`);
-          await new Promise((r) => setTimeout(r, 1500));
         }
       }
     }
-  }
 
-  console.error("❌ [Gemini Audio Transcribe] All candidate audio models exhausted.");
-  throw lastError;
+    console.error("❌ [Gemini Audio Transcribe] All candidate audio models exhausted.");
+    throw lastError;
+  } finally {
+    // ── HIPAA EPHEMERAL CLEANUP ──
+    // Purge uploaded audio recording from Gemini File API immediately after transcription
+    if (uploadedFileName) {
+      try {
+        console.log(`🧹 [HIPAA Cleanup] Deleting ephemeral audio file "${uploadedFileName}" from Gemini...`);
+        await axios.delete(`https://generativelanguage.googleapis.com/v1beta/${uploadedFileName}?key=${apiKey}`, { timeout: 10000 });
+        console.log(`✅ [HIPAA Cleanup] Ephemeral audio file purged successfully from Gemini.`);
+      } catch (delErr) {
+        console.warn(`⚠️ [HIPAA Cleanup] Ephemeral audio cleanup notice:`, delErr.message);
+      }
+    }
+  }
 }
 
 /**
@@ -735,10 +755,14 @@ export const generateSOAPNote = async (req, res) => {
     const { transcript, patient, templateType = "soap" } = req.body;
     const todayIso = new Date().toISOString().split("T")[0];
 
-    console.log(`[Clinical AI] Template: "${templateType}" | Patient: "${patient?.name || "Unknown"}" (ID: ${patient?.id || "N/A"}) | Age: ${patient?.age || "N/A"}`);
-    console.log(`[Clinical AI] Transcript length: ${transcript ? transcript.length : 0} chars | Date: ${todayIso}`);
+    // HIPAA PHI Sanitization before AI processing
+    const safePatient = sanitizePatientForAi(patient);
+    const safeTranscript = sanitizeTextForAi(transcript);
 
-    if (!transcript || !transcript.trim()) {
+    console.log(`[Clinical AI] Template: "${templateType}" | Patient: "${safePatient?.name || "Unknown"}" (ID: ${safePatient?.id || "N/A"}) | Age: ${safePatient?.age || "N/A"}`);
+    console.log(`[Clinical AI] Transcript length: ${safeTranscript ? safeTranscript.length : 0} chars | Date: ${todayIso}`);
+
+    if (!safeTranscript || !safeTranscript.trim()) {
       console.warn("⚠️ [Clinical AI] Transcript is empty or missing");
       return res.status(400).json({ error: "Transcript is required" });
     }
@@ -922,15 +946,15 @@ For suggested_questions: If the doctor did NOT cover: symptom duration, pain sca
         role: "user",
         content: `
 Patient Details:
-- Name: ${patient?.name || "Unknown"}
-- Age: ${patient?.age || "N/A"} years
-- Gender: ${patient?.gender || "N/A"}
-- Blood Group: ${patient?.bloodGroup || "N/A"}
-- Status: ${patient?.status || "N/A"}
+- Name: ${safePatient?.name || "Unknown"}
+- Age: ${safePatient?.age || "N/A"} years
+- Gender: ${safePatient?.gender || "N/A"}
+- Blood Group: ${safePatient?.bloodGroup || "N/A"}
+- Status: ${safePatient?.status || "N/A"}
 - Consultation / Today's Date: ${todayIso}
 
 Consultation Transcript:
-"${transcript}"
+"${safeTranscript}"
 
 Format: ${templateType.toUpperCase()}
 Write the requested clinical document. Return ONLY the valid JSON object.
@@ -977,6 +1001,7 @@ Write the requested clinical document. Return ONLY the valid JSON object.
       warning_signs: Array.isArray(parsed.warning_signs) ? parsed.warning_signs : (parsed.emergency_red_flags ? [parsed.emergency_red_flags] : []),
       suggested_questions: Array.isArray(parsed.suggested_questions) ? parsed.suggested_questions : [],
       quick_summary: parsed.quick_summary || "",
+      patient_status: patient?.status || "ACTIVE",
       ...parsed,
     };
 
@@ -1034,14 +1059,14 @@ export const saveConsultationDraft = async (req, res) => {
       data: {
         patientId: Number(patientId),
         doctorId,
-        transcript,
-        soapNote,
+        transcript: encrypt(transcript),
+        soapNote: encrypt(soapNote),
         status: "DRAFT",
       },
     });
 
     console.log(`✅ [Save Draft] Note created with ID: ${note.id} (Status: DRAFT)`);
-    return res.json({ note });
+    return res.json({ note: decryptNote(note) });
   } catch (err) {
     console.error("❌ [Save Draft] Error:", err.message);
     return res.status(500).json({ error: "Failed to save draft note", detail: err.message });
@@ -1063,8 +1088,8 @@ export const updateConsultationDraft = async (req, res) => {
     const updated = await prisma.consultationNote.update({
       where: { id },
       data: {
-        ...(soapNote ? { soapNote: typeof soapNote === "string" ? soapNote : JSON.stringify(soapNote) } : {}),
-        ...(finalNote ? { finalNote: typeof finalNote === "string" ? finalNote : JSON.stringify(finalNote) } : {}),
+        ...(soapNote ? { soapNote: encrypt(typeof soapNote === "string" ? soapNote : JSON.stringify(soapNote)) } : {}),
+        ...(finalNote ? { finalNote: encrypt(typeof finalNote === "string" ? finalNote : JSON.stringify(finalNote)) } : {}),
       },
       include: {
         patient: true,
@@ -1073,7 +1098,7 @@ export const updateConsultationDraft = async (req, res) => {
     });
 
     console.log(`✅ [Update Draft] Note #${id} updated`);
-    return res.json({ note: updated, message: "Draft updated successfully" });
+    return res.json({ note: decryptNote(updated), message: "Draft updated successfully" });
   } catch (err) {
     console.error("❌ [Update Draft] Error:", err.message);
     return res.status(500).json({ error: "Failed to update draft note", detail: err.message });
@@ -1099,15 +1124,16 @@ export const approveConsultationNote = async (req, res) => {
     }
 
     // Fetch existing note with patient and doctor details
-    const existingNote = await prisma.consultationNote.findUnique({
+    const rawNote = await prisma.consultationNote.findUnique({
       where: { id: Number(noteId) },
       include: { patient: true, doctor: true },
     });
 
-    if (!existingNote) {
+    if (!rawNote) {
       console.warn(`⚠️ [Approve Note] Note with ID ${noteId} not found in database`);
       return res.status(404).json({ error: `Note #${noteId} not found` });
     }
+    const existingNote = decryptNote(rawNote);
 
     // --- Generate patient-friendly version via AI ---
     let patientNote = null;
@@ -1137,7 +1163,7 @@ RULES:
           role: "user",
           content: `
 Doctor's Consultation Note:
-${finalNote}
+${typeof finalNote === "string" ? finalNote : JSON.stringify(finalNote, null, 2)}
 
 Rewrite this as a friendly, reassuring summary for the patient. Return plain text only.
           `,
@@ -1165,19 +1191,21 @@ Rewrite this as a friendly, reassuring summary for the patient. Return plain tex
     });
 
     const formattedPatientNote = `Note from ${doctorName} — ${date}\n\n${patientNote}`;
+    const serializedFinalNote = typeof finalNote === "string" ? finalNote : JSON.stringify(finalNote);
 
-    // Update DB
+    // Update DB with encrypted sensitive fields
     const note = await prisma.consultationNote.update({
       where: { id: Number(noteId) },
       data: {
-        finalNote,
-        patientNote: formattedPatientNote,
+        finalNote: encrypt(serializedFinalNote),
+        patientNote: encrypt(formattedPatientNote),
         status: "APPROVED",
       },
     });
 
     // --- Sync & Store into MedicalRecord table ---
     let createdRecord = null;
+    let computedStatus = existingNote?.patient?.status || "ACTIVE";
     try {
       let parsedData = null;
       try {
@@ -1191,46 +1219,66 @@ Rewrite this as a friendly, reassuring summary for the patient. Return plain tex
       const vitals = parsedData?.what_was_observed || parsedData?.vitals || null;
       const prescription = parsedData?.medications || parsedData?.prescription || null;
       const notes = parsedData?.quick_summary || parsedData?.notes || formattedPatientNote || null;
-      const riskLevel = existingNote?.patient?.status || "ACTIVE";
       const redFlags = parsedData?.warning_signs ? JSON.stringify(parsedData.warning_signs) : null;
       const recommendations = parsedData
         ? [parsedData.treatment_plan, parsedData.follow_up].filter(Boolean).join("\n\nFollow-up: ")
         : null;
 
+      // ── DOCTOR MANUALLY SELECTED PATIENT STATUS ──
+      // Pure manual selection by attending doctor (ACTIVE / CRITICAL / DISCHARGED)
+      computedStatus = evaluatePatientStatus({
+        doctorChosenStatus: parsedData?.patient_status || req.body.patientStatus,
+        currentStatus: existingNote?.patient?.status || "ACTIVE",
+      });
+
+      console.log(`🩺 [Doctor Selected Patient Status] Patient #${existingNote.patientId} set to "${computedStatus}"`);
+
+      const riskLevel = computedStatus;
+
       createdRecord = await prisma.medicalRecord.create({
         data: {
           patientId: existingNote.patientId,
-          symptoms,
-          diagnosis,
-          vitals,
-          prescription,
-          notes,
+          symptoms: encrypt(symptoms),
+          diagnosis: encrypt(diagnosis),
+          vitals: encrypt(vitals),
+          prescription: encrypt(prescription),
+          notes: encrypt(notes),
           riskLevel,
-          redFlags,
-          recommendations,
+          redFlags: encrypt(redFlags),
+          recommendations: encrypt(recommendations),
         },
       });
 
       console.log(`✅ [Approve Note] MedicalRecord #${createdRecord.id} successfully saved to MedicalRecord table for patient #${existingNote.patientId}`);
 
-      // Also update patient's medicalNotes for quick directory overview
-      if (diagnosis || notes) {
-        await prisma.patient.update({
-          where: { id: existingNote.patientId },
-          data: {
-            medicalNotes: notes || diagnosis,
-          },
-        });
-      }
+      // Dynamically update patient's status and encrypted medicalNotes in DB
+      await prisma.patient.update({
+        where: { id: existingNote.patientId },
+        data: {
+          status: computedStatus,
+          ...(diagnosis || notes ? { medicalNotes: encrypt(notes || diagnosis) } : {}),
+        },
+      });
     } catch (mrErr) {
       console.error("❌ [Approve Note] Failed to store MedicalRecord:", mrErr.message);
     }
 
     const totalElapsed = Date.now() - reqStart;
     console.log(`🎉 [Approve Note] Note #${noteId} successfully APPROVED and saved in ${totalElapsed}ms`);
+
+    // HIPAA § 164.312(b) Audit Trail
+    await logAuditEvent(req, {
+      action: "APPROVE_CONSULTATION_NOTE",
+      resource: "ConsultationNote",
+      resourceId: note.id,
+      patientId: existingNote.patientId,
+      details: { doctorId: existingNote.doctorId, status: "APPROVED" },
+    });
+
     return res.json({
-      note,
-      medicalRecord: createdRecord,
+      note: decryptNote(note),
+      medicalRecord: decryptMedicalRecord(createdRecord),
+      patientStatus: computedStatus,
       message: "Consultation note approved and saved successfully to EHR & Medical Records.",
     });
   } catch (err) {
@@ -1303,7 +1351,17 @@ export const getConsultationNotes = async (req, res) => {
     });
 
     console.log(`✅ [Get Notes] Found ${notes.length} notes`);
-    return res.json(notes);
+
+    // HIPAA § 164.312(b) Audit Trail: record read access
+    if (notes.length > 0) {
+      logAuditEvent(req, {
+        action: "VIEW_CONSULTATION_LIST",
+        resource: "ConsultationNote",
+        details: { count: notes.length, filterPatientId: patientId },
+      }).catch(() => {});
+    }
+
+    return res.json(decryptNotesList(notes));
   } catch (err) {
     console.error("❌ [Get Notes] Error:", err.message);
     return res.status(500).json({ error: "Failed to fetch consultation notes", detail: err.message });
@@ -1349,7 +1407,7 @@ export const getMyPatientNotes = async (req, res) => {
     });
 
     console.log(`✅ [Get My Patient Notes] Found ${notes.length} approved notes for patient ${patient.name} (ID: ${patient.id})`);
-    return res.json(notes);
+    return res.json(decryptNotesList(notes));
   } catch (err) {
     console.error("❌ [Get My Patient Notes] Error:", err.message);
     return res.status(500).json({ error: "Failed to fetch your consultation notes", detail: err.message });
@@ -1378,6 +1436,15 @@ export const deleteConsultationNote = async (req, res) => {
 
     await prisma.consultationNote.delete({
       where: { id },
+    });
+
+    // HIPAA § 164.312(b) Audit Trail: record deletion
+    await logAuditEvent(req, {
+      action: "DELETE_CONSULTATION_NOTE",
+      resource: "ConsultationNote",
+      resourceId: id,
+      patientId: note.patientId,
+      details: { doctorId: note.doctorId },
     });
 
     console.log(`✅ [Delete Note] Successfully deleted consultation note ID: ${id}`);

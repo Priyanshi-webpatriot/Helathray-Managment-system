@@ -16,12 +16,14 @@ import PatientNotesPage from "./pages/PatientNotesPage";
 import FindClinics from "./pages/FindClinics";
 import DoctorProfile from "./pages/DoctorProfile";
 import DoctorPatientHistory from "./pages/DoctorPatientHistory";
+import CustomCursor from "./components/CustomCursor";
 
 function App() {
   return (
     
     <BrowserRouter>
-          <ToastContainer />
+      <CustomCursor />
+      <ToastContainer />
 
       <Routes>
         <Route path="/" element={<Login />} />

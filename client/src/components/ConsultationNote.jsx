@@ -1791,6 +1791,8 @@ export default function ConsultationNote({ patient }) {
       console.log("✅ [AI Note Writer] Clinical Note generated successfully:", res.data);
       const incomingData = res.data.soapData || {};
       incomingData.templateType = res.data.templateType || templateToUse;
+      // Keep patient status controlled strictly by doctor manual selection (defaults to patient's current status or ACTIVE)
+      incomingData.patient_status = editedData?.patient_status || patient?.status || "ACTIVE";
 
       setSoapData(incomingData);
       setSoapNote(res.data.soapNote || JSON.stringify(incomingData));
@@ -2036,6 +2038,15 @@ export default function ConsultationNote({ patient }) {
     }
 
     printClinicalDocument(title, bodyHtml);
+    API.post("/audit/log", {
+      action: "PRINT_CONSULTATION_NOTE",
+      patientId: patient?.id,
+      resourceId: savedNoteId,
+      userId: user?.id,
+      userRole: user?.role || "doctor",
+      userName: user?.name,
+      details: { templateType: type, patientName: patName },
+    }).catch(() => {});
   };
 
   const handleFieldEdit = (key, value) => {
@@ -2066,7 +2077,9 @@ export default function ConsultationNote({ patient }) {
       setCurrentStep(4);
       fetchPastNotes();
     } catch (err) {
-      const serverMsg = err?.response?.data?.error || err?.response?.data?.detail || err.message;
+      const serverMsg = err?.response?.data?.detail
+        ? `${err?.response?.data?.error || "Error"}: ${err?.response?.data?.detail}`
+        : (err?.response?.data?.error || err.message);
       console.error("❌ [AI Note Writer] Approve failed:", {
         error: err,
         serverMsg,
@@ -2751,6 +2764,73 @@ export default function ConsultationNote({ patient }) {
                                   <Icon style={{ color: isActive ? "#ffffff" : tmpl.color }} />
                                   <span>{tmpl.label}</span>
                                   {isActive && <span className="cn-pill-active-dot" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Doctor Manual Patient Status Selection */}
+                        <div
+                          className="cn-patient-status-bar"
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            flexWrap: "wrap",
+                            gap: "8px",
+                            padding: "8px 14px",
+                            background: "#f8fafc",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "10px",
+                            marginBottom: "12px",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ fontSize: "11.5px", fontWeight: "800", color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                              Patient Status:
+                            </span>
+                            <span style={{ fontSize: "11px", color: "#64748b" }}>
+                              (Doctor manual selection)
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            {[
+                              { id: "ACTIVE", label: "Active", bg: "#ecfdf5", text: "#059669", border: "#a7f3d0", dot: "#10b981" },
+                              { id: "CRITICAL", label: "Critical", bg: "#fef2f2", text: "#b91c1c", border: "#fecaca", dot: "#ef4444" },
+                              { id: "DISCHARGED", label: "Discharged", bg: "#f1f5f9", text: "#475569", border: "#cbd5e1", dot: "#94a3b8" },
+                            ].map((st) => {
+                              const isSelected = (editedData?.patient_status || "ACTIVE").toUpperCase() === st.id;
+                              return (
+                                <button
+                                  key={st.id}
+                                  type="button"
+                                  onClick={() => setEditedData((prev) => ({ ...prev, patient_status: st.id }))}
+                                  style={{
+                                    padding: "4px 11px",
+                                    borderRadius: "999px",
+                                    border: isSelected ? `2px solid ${st.text}` : `1px solid ${st.border}`,
+                                    background: isSelected ? st.bg : "#ffffff",
+                                    color: isSelected ? st.text : "#64748b",
+                                    fontSize: "12px",
+                                    fontWeight: isSelected ? "800" : "600",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    boxShadow: isSelected ? "0 1px 4px rgba(0,0,0,0.06)" : "none",
+                                    transition: "all 0.15s ease",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      width: "6px",
+                                      height: "6px",
+                                      borderRadius: "50%",
+                                      backgroundColor: st.dot,
+                                    }}
+                                  />
+                                  {st.label}
                                 </button>
                               );
                             })}

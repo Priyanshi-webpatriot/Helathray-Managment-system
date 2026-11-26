@@ -53,11 +53,16 @@
   --topbar-height: 64px;
 }
 
-/* ── CORE RESET ── */
+/* ── CORE RESET & UNIVERSAL NATIVE CURSOR SUPPRESSION ── */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  cursor: none !important;
+}
+
+html, body, a, button, input, select, textarea, label, [role="button"], .cursor-pointer, [style*="cursor"] {
+  cursor: none !important;
 }
 
 body {
@@ -83,7 +88,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Interactive elements */
 a { text-decoration: none; color: inherit; }
-button { font-family: inherit; cursor: pointer; border: none; outline: none; transition: all 0.2s ease; }
+button { font-family: inherit; border: none; outline: none; transition: all 0.2s ease; }
 input, select, textarea { font-family: inherit; outline: none; transition: all 0.2s ease; }
 
 /* ── CLINIC PORTAL WORKSPACE (Layout.jsx) ── */
@@ -5199,17 +5204,21 @@ input:checked + .slider:before {
   background: rgba(255, 255, 255, 0.3);
 }
 
-/* ── UNIVERSAL INTERACTIVE CURSOR RULES ── */
-/* Ensures pointer cursor appears everywhere user can click or interact */
+/* ── UNIVERSAL CURSOR: SUPPRESS ALL DEFAULT / HAND POINTERS ── */
+*,
+*::before,
+*::after,
+*:hover,
+*:active,
+*:focus,
+html,
+body,
 button,
 [role="button"],
 a,
-input[type="submit"],
-input[type="button"],
-input[type="reset"],
-input[type="checkbox"],
-input[type="radio"],
+input,
 select,
+textarea,
 .sidebar-link,
 .practo-nav-link,
 .doctor-nav-link,
@@ -5251,21 +5260,16 @@ select,
 .pagination button,
 tr[onClick],
 [onClick],
-/* Date & Time picker inputs and internal calendar/clock icons */
 input[type="date"],
 input[type="time"],
 input[type="datetime-local"],
 .doc-slot-input,
 .modal-date-picker,
-.modal-time-picker {
-  cursor: pointer;
-}
-
-/* Make sure the native browser calendar and clock picker indicators also show pointer */
+.modal-time-picker,
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-  cursor: pointer;
+  cursor: none !important;
 }
 
 /* Disabled states should show not-allowed */

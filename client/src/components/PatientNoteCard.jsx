@@ -326,55 +326,98 @@ function printPatientOfficialDocument(note, parsed) {
   win.document.close();
 }
 
+const renderInlineMarkdown = (text = "") => {
+  if (!text) return "";
+  // Split by markdown bold (**text** or __text__)
+  const parts = text.split(/(\*\*[^*]+?\*\*|__[^*]+?__)/g);
+  return parts.map((part, i) => {
+    if (
+      (part.startsWith("**") && part.endsWith("**")) ||
+      (part.startsWith("__") && part.endsWith("__"))
+    ) {
+      return (
+        <strong key={i} style={{ fontWeight: 700, color: "#0f172a" }}>
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return part;
+  });
+};
+
 const renderFormattedLine = (line, idx) => {
   const trimmed = line.trim();
   if (!trimmed) return null;
 
-  if (/^From\b/i.test(trimmed)) {
+  // 1. Doctor Greeting / "From Dr. ..." / "Note from ..."
+  if (/^From\b|^Note from/i.test(trimmed)) {
     return (
       <div key={idx} className="pnw-note-from">
         <FaUserMd />
-        <span>{trimmed}</span>
+        <span>{renderInlineMarkdown(trimmed)}</span>
       </div>
     );
   }
 
+  // 2. Section Heading Detection
+  // Matches:
+  // - Markdown hash headers: "### Title"
+  // - Markdown bold headers: "**What is going on with your health**"
+  // - Colon headers: "Your medicines:"
+  // - Known clinical sections (case-insensitive)
+  const isMarkdownHeader = /^#{1,4}\s+/.test(trimmed);
+  const isDoubleAsteriskHeader = /^\*\*[^*]+?\*\*:?$/.test(trimmed);
+  const isDoubleUnderscoreHeader = /^__[^_]+?__:?$/.test(trimmed);
+
+  const cleanTitle = trimmed
+    .replace(/^#{1,4}\s+/, "")
+    .replace(/^\*\*|\*\*:?$/g, "")
+    .replace(/^__|__:?$/g, "")
+    .replace(/:$/, "")
+    .trim();
+
+  const isKnownSection =
+    /^(what is going on|your medicines|what to do|what to do and avoid|what to avoid|when to see your doctor|when to seek medical help|warning signs|red flags|emergency|summary|diagnosis|assessment|plan|medications|prescription|instructions|follow[- ]?up|advice|notes|symptoms|recommendations|diet|lifestyle|care instructions|test results|next steps)\b/i.test(
+      cleanTitle
+    );
+
+  const isColonSection = trimmed.endsWith(":") && cleanTitle.length <= 75 && !trimmed.includes(". ");
+  const isShortBoldTitle = (isDoubleAsteriskHeader || isDoubleUnderscoreHeader) && cleanTitle.length <= 75 && !cleanTitle.includes(". ");
+
+  if (isMarkdownHeader || isShortBoldTitle || (isKnownSection && cleanTitle.length <= 75) || isColonSection) {
+    return (
+      <h4 key={idx} className="pnw-note-section-title">
+        {cleanTitle}
+      </h4>
+    );
+  }
+
+  // 3. Numbered steps (e.g. "1. ..." or "1) ...")
   const numberedMatch = trimmed.match(/^(\d+)[.)]\s+(.*)$/);
   if (numberedMatch) {
     return (
       <div key={idx} className="pnw-note-step">
         <span className="pnw-step-num">{numberedMatch[1]}</span>
-        <span>{numberedMatch[2]}</span>
+        <span>{renderInlineMarkdown(numberedMatch[2])}</span>
       </div>
     );
   }
 
-  if (/^[-•*]\s+/.test(trimmed)) {
+  // 4. Bullet Points (handles •, -, *, and Unicode bullets)
+  if (/^[-•*\u2022\u2023\u25E6\u2043\u2219▪▫–—]\s+/.test(trimmed)) {
+    const bulletContent = trimmed.replace(/^[-•*\u2022\u2023\u25E6\u2043\u2219▪▫–—]\s+/, "");
     return (
       <div key={idx} className="pnw-note-bullet">
         <span className="pnw-bullet-dot" />
-        <span>{trimmed.replace(/^[-•*]\s+/, "")}</span>
+        <span>{renderInlineMarkdown(bulletContent)}</span>
       </div>
     );
   }
 
-  const isSectionHeading =
-    (trimmed.endsWith(":") && trimmed.length <= 60) ||
-    /^(summary|diagnosis|assessment|plan|medications|prescription|instructions|follow[- ]?up|advice|notes|symptoms|recommendations)\b[:\-]?$/i.test(
-      trimmed
-    );
-
-  if (isSectionHeading) {
-    return (
-      <h4 key={idx} className="pnw-note-section-title">
-        {trimmed.replace(/:$/, "")}
-      </h4>
-    );
-  }
-
+  // 5. Standard Paragraphs (with inline bold parsing)
   return (
     <p key={idx} className="pnw-note-paragraph">
-      {trimmed}
+      {renderInlineMarkdown(trimmed)}
     </p>
   );
 };
@@ -739,7 +782,21 @@ export default function PatientNoteCard({ isDedicatedPage = false }) {
                   <button
                     type="button"
                     className="pnw-print-action-btn"
-                    onClick={() => printPatientOfficialDocument(activeNote, parsedDoc)}
+                    onClick={() => {
+                      printPatientOfficialDocument(activeNote, parsedDoc);
+                      API.post("/audit/log", {
+                        action: "PATIENT_PRINT_DOCUMENT",
+                        patientId: activeNote.patientId,
+                        resourceId: activeNote.id,
+                        userId: user?.id,
+                        userRole: user?.role || "patient",
+                        userName: user?.name,
+                        details: {
+                          docType: parsedDoc?.templateType || "soap",
+                          doctorName: activeNote.doctor?.name,
+                        },
+                      }).catch(() => {});
+                    }}
                     title="Print or download official document with clinic letterhead"
                   >
                     <FiPrinter /> Print Official Document

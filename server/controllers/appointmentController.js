@@ -55,6 +55,24 @@ export const createAppointment = async (req, res) => {
         time: normalizedTime || time || null,
       },
     });
+
+    // If the patient was previously DISCHARGED, reactivate their status to ACTIVE
+    try {
+      const currentPatient = await prisma.patient.findUnique({
+        where: { id: Number(patientId) },
+        select: { status: true },
+      });
+      if (currentPatient?.status === "DISCHARGED") {
+        await prisma.patient.update({
+          where: { id: Number(patientId) },
+          data: { status: "ACTIVE" },
+        });
+        console.log(`🔄 [Dynamic Patient Status] Patient #${patientId} reactivated to ACTIVE upon new appointment booking`);
+      }
+    } catch (statusErr) {
+      console.warn("⚠️ [Dynamic Patient Status] Reactivation check notice:", statusErr.message);
+    }
+
     res.status(201).json(appointment);
 
     // Process reminders immediately so patient and doctor don't wait for next cron tick
@@ -72,14 +90,17 @@ export const getAppointments = async (req, res) => {
     const limit = Number(req.query.limit) || 5;
     const skip = (page - 1) * limit;
 
-    const role = req.headers.role;
-    const userId = Number(req.headers.userid);
+    const role = (req.user?.role || req.headers.role || "").toLowerCase();
+    const userId = Number(req.user?.id || req.headers.userid);
 
     let whereCondition = {};
 
+    // If logged in user is admin, they can view all appointments
+    if (role === "admin") {
+      whereCondition = {};
+    }
     // If logged in user is doctor
-    if (role === "doctor") {
-
+    else if (role === "doctor") {
       // find doctor using logged-in userId
       const doctor = await prisma.doctor.findUnique({
         where: { userId }
@@ -111,6 +132,8 @@ export const getAppointments = async (req, res) => {
       whereCondition = {
         patientId: patient.id
       };
+    } else {
+      return res.status(403).json({ error: "Access denied. Valid role required." });
     }
 
     const total = await prisma.appointment.count({

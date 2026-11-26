@@ -1,5 +1,7 @@
 import prisma from "../prisma/client.js";
 import axios from "axios";
+import { encrypt, decrypt, decryptChat, decryptChatList } from "../utils/cryptoUtil.js";
+import { sanitizeTextForAi } from "../utils/phiSanitizer.js";
 
 const normalizeSpecialty = (value = "") =>
   value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -135,8 +137,7 @@ export const chatWithAI = async (req, res) => {
   const startTime = Date.now();
   console.log("\n==================== [AI CHAT REQUEST START] ====================");
   console.log(`[Chat Controller] Timestamp: ${new Date().toISOString()}`);
-  console.log(`[Chat Controller] Headers -> userId: "${req.headers.userid || ""}", role: "${req.headers.role || ""}"`);
-  console.log("[Chat Controller] Patient Message:", req.body?.message);
+  console.log(`[Chat Controller] Role: "${req.headers.role || "patient"}"`);
 
   try {
     const { message, history: clientHistory } = req.body;
@@ -155,16 +156,15 @@ export const chatWithAI = async (req, res) => {
         where: { userId },
       });
       patientId = patient?.id || null;
-      console.log(`[Chat Controller] Patient lookup for userId ${userId}: ${patient ? `Found (ID: ${patient.id}, Name: ${patient.name})` : "Not found in DB"}`);
     }
 
-    // Capture past 6 to 7 messages history
+    // Capture past 6 to 7 messages history with PHI sanitization
     let historyLines = [];
     if (Array.isArray(clientHistory) && clientHistory.length > 0) {
       historyLines = clientHistory.slice(-7).map((h) => {
         const sender = h.sender || (h.type === "user" ? "Patient" : "Assistant");
         const text = h.text || h.message || h.reply || "";
-        return `${sender}: ${text}`;
+        return `${sender}: ${sanitizeTextForAi(text)}`;
       });
     } else if (patientId) {
       const pastChats = await prisma.chat.findMany({
@@ -174,7 +174,7 @@ export const chatWithAI = async (req, res) => {
       });
       historyLines = pastChats
         .reverse()
-        .flatMap((c) => [`Patient: ${c.message}`, `Assistant: ${c.reply}`])
+        .flatMap((c) => [`Patient: ${sanitizeTextForAi(decrypt(c.message))}`, `Assistant: ${sanitizeTextForAi(decrypt(c.reply))}`])
         .slice(-7);
     }
 
@@ -182,8 +182,6 @@ export const chatWithAI = async (req, res) => {
       historyLines.length > 0
         ? `\nRecent Conversation History (past 6-7 messages):\n${historyLines.join("\n")}\n`
         : "";
-
-    console.log(`[Chat Controller] Conversation History Context (${historyLines.length} messages):\n${historyLines.join("\n") || "(None)"}`);
 
     // Fetch doctors from database for dynamic matching
     const allDoctors = await prisma.doctor.findMany();
@@ -212,8 +210,8 @@ export const chatWithAI = async (req, res) => {
         await prisma.chat.create({
           data: {
             patientId,
-            message,
-            reply: quickReply,
+            message: encrypt(message),
+            reply: encrypt(quickReply),
           },
         });
       }
@@ -242,11 +240,13 @@ export const chatWithAI = async (req, res) => {
     let modelSucceeded = false;
     let modelUsed = "";
 
+    const sanitizedPatientMsg = sanitizeTextForAi(message);
+
     const promptText = `
 You are a helpful and professional clinical assistant for a healthcare hospital.
 ${historySection}
 Patient's current message:
-"${message}"
+"${sanitizedPatientMsg}"
 
 Hospital Medical Specialties available:
 ${specialtyList}
@@ -364,8 +364,8 @@ RETURN ONLY A VALID JSON OBJECT:
     console.log("💾 [Chat Controller] Saving chat to database...");
     const savedChat = await prisma.chat.create({
       data: {
-        message,
-        reply,
+        message: encrypt(message),
+        reply: encrypt(reply),
         specialty: specialty || null,
         patientId: patientId || null,
       },
@@ -421,6 +421,8 @@ export const getChats = async (req, res) => {
     res.json(
       chats.map((chat) => ({
         ...chat,
+        message: decrypt(chat.message),
+        reply: decrypt(chat.reply),
         doctor: chat.specialty ? formatDoctor(findSuggestedDoctor(doctors, chat.specialty)) : null,
       }))
     );

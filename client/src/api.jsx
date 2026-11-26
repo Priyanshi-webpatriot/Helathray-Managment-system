@@ -14,6 +14,16 @@ API.interceptors.request.use(
             config.headers["Authorization"] = `Bearer ${token}`;
         }
 
+        const userStr = localStorage.getItem("user");
+        if (userStr) {
+            try {
+                const u = JSON.parse(userStr);
+                if (u?.id) config.headers["userid"] = String(u.id);
+                if (u?.role) config.headers["role"] = u.role;
+                if (u?.name) config.headers["username"] = u.name;
+            } catch {}
+        }
+
         const time = new Date().toLocaleTimeString();
         const method = (config.method || "GET").toUpperCase();
         console.log(`🌐 [FRONTEND API REQUEST] [${time}] ${method} ${config.url}`, {
@@ -37,7 +47,7 @@ API.interceptors.response.use(
     (response) => {
         const time = new Date().toLocaleTimeString();
         const method = (response.config?.method || "GET").toUpperCase();
-        console.log(`✅ [FRONTEND API SUCCESS] [${time}] ${method} ${response.config?.url} (Status: ${response.status})`, response.data);
+        console.log(`✅ [FRONTEND API SUCCESS] [${time}] ${method} ${response.config?.url} (Status: ${response.status})`);
         return response;
     },
     (error) => {

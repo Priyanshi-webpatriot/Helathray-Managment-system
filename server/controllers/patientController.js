@@ -1,5 +1,6 @@
 import prisma from "../prisma/client.js";
 import bcrypt from "bcrypt"; 
+import { encrypt, decrypt, decryptPatient, decryptPatientsList } from "../utils/cryptoUtil.js"; 
 // create patient
 export const createPatient = async (req, res) => {
   try {
@@ -35,12 +36,21 @@ export const createPatient = async (req, res) => {
     });
 
     const patient = await prisma.patient.create({
-      data: { name, age: Number(age), gender, contact,  bloodGroup: bloodGroup || null,status: status ? status.toUpperCase() : undefined, userId: user.id, medicalNotes: medicalNotes || null }
+      data: {
+        name,
+        age: Number(age),
+        gender,
+        contact,
+        bloodGroup: bloodGroup || null,
+        status: status ? status.toUpperCase() : undefined,
+        userId: user.id,
+        medicalNotes: medicalNotes ? encrypt(medicalNotes) : null,
+      },
     });
 
-      res.status(201).json({
+    res.status(201).json({
       message: "Patient + User created successfully",
-      patient
+      patient: decryptPatient(patient),
     });
   } catch (error) {
     console.log("GET PATIENT ERROR:", error);
@@ -51,9 +61,8 @@ export const createPatient = async (req, res) => {
 // get patient
 export const getPatients = async (req, res) => {
   try {
-
-    const role = req.headers.role;
-    const userId = Number(req.headers.userid);
+    const role = (req.user?.role || req.headers.role || "").toLowerCase();
+    const userId = Number(req.user?.id || req.headers.userid);
 
     let patients;
 
@@ -117,7 +126,7 @@ export const getPatients = async (req, res) => {
       });
     }
 
-    res.json(patients);
+    res.json(decryptPatientsList(patients));
 
   } catch (error) {
 
@@ -154,7 +163,7 @@ export const updatePatient = async (req, res) => {
       contact,
       bloodGroup: bloodGroup || null,
       status: status ? status.toUpperCase() : undefined,
-      medicalNotes: medicalNotes || null,
+      medicalNotes: medicalNotes !== undefined ? (medicalNotes ? encrypt(medicalNotes) : null) : existingPatient.medicalNotes,
     },    
    });
      // 3. Update linked user (optional)
@@ -168,7 +177,7 @@ export const updatePatient = async (req, res) => {
       });
     }
 
-   res.status(200).json(updatePatient);
+   res.status(200).json(decryptPatient(updatePatient));
   }catch(error){
     res.status(500).json({ error: "Failed to update patient" });
   }
@@ -238,7 +247,7 @@ export const getPatientProfile = async (req, res) => {
       });
     }
 
-    res.status(200).json(patient);
+    res.status(200).json(decryptPatient(patient));
 
   } catch (error) {
 
@@ -274,7 +283,7 @@ export const updatePatientProfile = async (req, res) => {
         gender: gender !== undefined && gender !== "" ? gender : existingPatient.gender,
         contact: contact !== undefined && contact !== "" ? contact : existingPatient.contact,
         bloodGroup: bloodGroup !== undefined ? (bloodGroup || null) : existingPatient.bloodGroup,
-        medicalNotes: medicalNotes !== undefined ? (medicalNotes || null) : existingPatient.medicalNotes,
+        medicalNotes: medicalNotes !== undefined ? (medicalNotes ? encrypt(medicalNotes) : null) : existingPatient.medicalNotes,
       },
       include: {
         user: {
@@ -295,7 +304,7 @@ export const updatePatientProfile = async (req, res) => {
       });
     }
 
-    res.status(200).json(updated);
+    res.status(200).json(decryptPatient(updated));
   } catch (error) {
     console.error("UPDATE PATIENT PROFILE ERROR:", error);
     res.status(500).json({ error: "Failed to update profile" });

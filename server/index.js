@@ -12,10 +12,24 @@ import medicalRecordRoutes from "./routes/medicalRecordRoutes.js";
 import "./utils/reminderCron.js";
 import reminderRoutes from "./routes/reminderRoutes.js";
 import consultationNoteRoutes from "./routes/consultationNoteRoutes.js";
+import auditRoutes from "./routes/auditRoutes.js";
 
 const app = express();
 app.set("etag", false); // Disables 304 ETag caching so APIs always return fresh 200 OK
-const JWT_SECRET = process.env.JWT_SECRET || "carescribe_jwt_secret_key";
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// ── HIPAA / OWASP SECURITY HEADERS ──
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(self), geolocation=()"
+  );
+  next();
+});
 
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
@@ -34,6 +48,7 @@ app.use((req, res, next) => {
       // Keep legacy header fields populated for backward compatibility
       req.headers.role = decoded.role;
       req.headers.userid = String(decoded.id);
+      if (decoded.name) req.headers.username = decoded.name;
     } catch {
       // Invalid token — req.user stays undefined; protected routes will reject via checkRole
     }
@@ -69,6 +84,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/medical-records", medicalRecordRoutes);
 app.use("/api/reminders", reminderRoutes);
 app.use("/api/consultation-notes", consultationNoteRoutes);
+app.use("/api/audit", auditRoutes);
 
 // ── GLOBAL BACKEND ERROR HANDLER ──
 app.use((err, req, res, next) => {

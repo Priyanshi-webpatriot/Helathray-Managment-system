@@ -271,7 +271,7 @@ export default function Layout() {
                 </div>
                 <div>
                   <strong style={{ fontSize: "16px", color: "#0f172a" }}>CareScribe</strong>
-                  <span className="brand-badge-super" style={{ marginLeft: "6px", fontSize: "9px" }}>DOCTOR PRO</span>
+                  <span className="brand-badge-super" style={{ marginLeft: "6px", fontSize: "9px" }}>DOCTOR</span>
                 </div>
               </div>
               <p className="footer-tagline">

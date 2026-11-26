@@ -9,6 +9,6 @@ const router = express.Router();
 router.post("/", checkRole(["admin", "doctor"]), createAppointment);
 
 // Get all appointments
-router.get("/", getAppointments);
+router.get("/", checkRole(["admin", "doctor", "patient"]), getAppointments);
 
 export default router;

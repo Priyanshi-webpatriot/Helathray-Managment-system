@@ -9,7 +9,7 @@ router.put("/profile", checkRole(["patient"]), updatePatientProfile);
 
 // Patient CRUD
 router.post("/", checkRole(["admin", "doctor"]), createPatient);
-router.get("/", getPatients);
+router.get("/", checkRole(["admin", "doctor"]), getPatients);
 router.put("/:id", checkRole(["admin", "doctor"]), updatePatient);
 router.delete("/:id", checkRole(["admin"]), deletePatient);
 

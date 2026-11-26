@@ -130,15 +130,6 @@ model MedicalRecord {
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
 }
 
-model MedicalReport {
-  id        Int    @id @default(autoincrement())
-  patientId Int
-  doctorId  Int?
-  report    String @db.Text
-
-  createdAt DateTime @default(now())
-}
-
 model ConsultationNote {
   id        Int      @id @default(autoincrement())
   patientId Int
@@ -172,4 +163,19 @@ model Reminder {
   sent Boolean @default(false)
 
   createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  userRole   String?
+  userName   String?
+  action     String   // e.g. "VIEW_CONSULTATION", "APPROVE_NOTE", "PRINT_NOTE", "COPY_NOTE", "DELETE_NOTE"
+  resource   String   // e.g. "ConsultationNote", "Patient", "Appointment"
+  resourceId Int?
+  patientId  Int?
+  ipAddress  String?
+  userAgent  String?
+  details    String?  @db.Text
+  createdAt  DateTime @default(now())
 }

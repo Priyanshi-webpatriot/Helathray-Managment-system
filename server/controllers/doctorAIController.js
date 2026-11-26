@@ -1,5 +1,7 @@
 import prisma from "../prisma/client.js";
 import axios from "axios";
+import { encrypt, decrypt, decryptChat, decryptChatList, decryptMedicalRecord } from "../utils/cryptoUtil.js";
+import { sanitizeTextForAi, sanitizePatientForAi } from "../utils/phiSanitizer.js";
 
 const GEMINI_OPENAI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
 
@@ -87,8 +89,7 @@ export const doctorAIChat = async (req, res) => {
     const { message, patient } = req.body;
     const userId = req.headers.userid;
 
-    console.log(`[Doctor AI Chat] Patient: "${patient?.name}" (ID: ${patient?.id}) | User ID: ${userId}`);
-    console.log(`[Doctor AI Chat] Message: "${message}"`);
+    console.log(`[Doctor AI Chat] Patient ID: ${patient?.id || "N/A"} | User ID: ${userId || "N/A"}`);
 
     let doctorId = null;
 
@@ -107,15 +108,22 @@ export const doctorAIChat = async (req, res) => {
     });
 
     const history = oldChats.flatMap((c) => [
-      { role: "user", content: c.message },
-      { role: "assistant", content: c.reply },
+      { role: "user", content: sanitizeTextForAi(decrypt(c.message)) },
+      { role: "assistant", content: sanitizeTextForAi(decrypt(c.reply)) },
     ]);
 
     // GET MEDICAL RECORD
-    const record = await prisma.medicalRecord.findFirst({
+    const rawRecord = await prisma.medicalRecord.findFirst({
       where: { patientId: patient?.id },
       orderBy: { createdAt: "desc" },
     });
+    const record = decryptMedicalRecord(rawRecord);
+
+    // Apply HIPAA Safe Harbor Sanitization before prompting external AI
+    const sanitizedPatient = sanitizePatientForAi(patient);
+    const sanitizedMessage = sanitizeTextForAi(message);
+    const sanitizedNotes = sanitizeTextForAi(decrypt(patient?.medicalNotes || ""));
+    const sanitizedRecordStr = record ? sanitizeTextForAi(JSON.stringify(record, null, 2)) : "No prior recorded EHR history";
 
     const messages = [
       {
@@ -135,21 +143,6 @@ You are an intelligent clinical AI assistant supporting an attending doctor in t
           - Use clean markdown
           - Sound confident and clinically useful
 
-          FORMAT:
-          ## Clinical Assessment
-          Short professional assessment.
-
-          ## Observations
-          - Point
-          - Point
-
-          ## Recommendations
-          - Point
-          - Point
-
-          ## Follow-up
-          - Point
-          - Point
 COMMUNICATION GUIDELINES:
 - Answer whatever question the doctor asks directly, normally, and professionally.
 - Match the doctor's query:
@@ -166,31 +159,20 @@ COMMUNICATION GUIDELINES:
       {
         role: "user",
         content: `
-          Doctor Message: ${message}
 Doctor's Message:
-"${message}"
+"${sanitizedMessage}"
 
-          Patient Info:
-          Name: ${patient?.name}
-          Age: ${patient?.age}
-          Gender: ${patient?.gender}
-          Blood Group: ${patient?.bloodGroup}
-          Status: ${patient?.status}
 Active Patient Context:
-- Name: ${patient?.name || "Patient"}
-- Age: ${patient?.age ? `${patient.age} years` : "Not specified"}
-- Gender: ${patient?.gender || "Not specified"}
-- Blood Group: ${patient?.bloodGroup || "Not specified"}
-- Clinical Status: ${patient?.status || "ACTIVE"}
-- Current Notes / Chief Complaint: ${patient?.medicalNotes || "None"}
+- Name: ${sanitizedPatient?.name || "Patient"}
+- Age: ${sanitizedPatient?.age ? `${sanitizedPatient.age} years` : "Not specified"}
+- Gender: ${sanitizedPatient?.gender || "Not specified"}
+- Blood Group: ${sanitizedPatient?.bloodGroup || "Not specified"}
+- Clinical Status: ${sanitizedPatient?.status || "ACTIVE"}
+- Current Notes / Chief Complaint: ${sanitizedNotes || "None"}
 - Past Medical Record / Vitals:
-${record ? JSON.stringify(record, null, 2) : "No prior recorded EHR history"}
+${sanitizedRecordStr}
 
-          Medical Record:
-          ${record ? JSON.stringify(record) : "No medical record available"}
-
-          Provide a professional doctor-style clinical assessment.
-Respond to the doctor's message directly and clinically.
+Respond to the doctor's message directly, professionally, and clinically.
         `,
       },
     ];
@@ -202,8 +184,8 @@ Respond to the doctor's message directly and clinically.
 
     await prisma.doctorChat.create({
       data: {
-        message,
-        reply,
+        message: encrypt(message),
+        reply: encrypt(reply),
         doctorId,
         patientId: patient?.id,
       },
@@ -232,7 +214,7 @@ export const getDoctorChats = async (req, res) => {
     });
 
     console.log(`✅ [Doctor AI Chats] Found ${chats.length} messages`);
-    res.json(chats);
+    res.json(decryptChatList(chats));
   } catch (err) {
     console.error("❌ [Doctor AI Chats] Fetch chats error:", err.message);
     res.status(500).json({ error: "Failed to fetch chats", detail: err.message });
@@ -286,7 +268,7 @@ export const generatePDFMedicalReport = async (req, res) => {
     });
 
     const conversation = chats
-      .map((c) => `Doctor: ${c.message}\nAI: ${c.reply}`)
+      .map((c) => `Doctor: ${decrypt(c.message)}\nAI: ${decrypt(c.reply)}`)
       .join("\n\n");
 
     const messages = [

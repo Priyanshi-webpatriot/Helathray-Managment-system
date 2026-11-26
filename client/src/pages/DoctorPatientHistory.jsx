@@ -62,6 +62,38 @@ const getPatientInitials = (name = "") => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
+const getPatientStatusBadgeMeta = (status = "ACTIVE") => {
+  const norm = String(status || "").toUpperCase().trim();
+  if (norm === "CRITICAL") {
+    return {
+      label: "CRITICAL",
+      bg: "#fef2f2",
+      text: "#b91c1c",
+      border: "#fecaca",
+      dot: "#ef4444",
+      isPulse: true,
+    };
+  }
+  if (norm === "DISCHARGED") {
+    return {
+      label: "DISCHARGED",
+      bg: "#f1f5f9",
+      text: "#475569",
+      border: "#cbd5e1",
+      dot: "#94a3b8",
+      isPulse: false,
+    };
+  }
+  return {
+    label: "ACTIVE",
+    bg: "#ecfdf5",
+    text: "#059669",
+    border: "#a7f3d0",
+    dot: "#10b981",
+    isPulse: false,
+  };
+};
+
 const parseNotePreview = (patientNote = "", soapNote = "") => {
   let snippet = "";
   let hasMeds = false;
@@ -112,55 +144,98 @@ const getNoteTemplateMeta = (note) => {
   }
 };
 
+const renderInlineMarkdown = (text = "") => {
+  if (!text) return "";
+  // Split by markdown bold (**text** or __text__)
+  const parts = text.split(/(\*\*[^*]+?\*\*|__[^*]+?__)/g);
+  return parts.map((part, i) => {
+    if (
+      (part.startsWith("**") && part.endsWith("**")) ||
+      (part.startsWith("__") && part.endsWith("__"))
+    ) {
+      return (
+        <strong key={i} style={{ fontWeight: 700, color: "#0f172a" }}>
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return part;
+  });
+};
+
 const renderFormattedLine = (line, idx) => {
   const trimmed = line.trim();
   if (!trimmed) return null;
 
+  // 1. Doctor Greeting / "From Dr. ..." / "Note from ..."
   if (/^From\b|^Note from/i.test(trimmed)) {
     return (
       <div key={idx} className="pnw-note-from">
         <FaUserMd />
-        <span>{trimmed}</span>
+        <span>{renderInlineMarkdown(trimmed)}</span>
       </div>
     );
   }
 
+  // 2. Section Heading Detection
+  // Matches:
+  // - Markdown hash headers: "### Title"
+  // - Markdown bold headers: "**What is going on with your health**"
+  // - Colon headers: "Your medicines:"
+  // - Known clinical sections (case-insensitive)
+  const isMarkdownHeader = /^#{1,4}\s+/.test(trimmed);
+  const isDoubleAsteriskHeader = /^\*\*[^*]+?\*\*:?$/.test(trimmed);
+  const isDoubleUnderscoreHeader = /^__[^_]+?__:?$/.test(trimmed);
+
+  const cleanTitle = trimmed
+    .replace(/^#{1,4}\s+/, "")
+    .replace(/^\*\*|\*\*:?$/g, "")
+    .replace(/^__|__:?$/g, "")
+    .replace(/:$/, "")
+    .trim();
+
+  const isKnownSection =
+    /^(what is going on|your medicines|what to do|what to do and avoid|what to avoid|when to see your doctor|when to seek medical help|warning signs|red flags|emergency|summary|diagnosis|assessment|plan|medications|prescription|instructions|follow[- ]?up|advice|notes|symptoms|recommendations|diet|lifestyle|care instructions|test results|next steps)\b/i.test(
+      cleanTitle
+    );
+
+  const isColonSection = trimmed.endsWith(":") && cleanTitle.length <= 75 && !trimmed.includes(". ");
+  const isShortBoldTitle = (isDoubleAsteriskHeader || isDoubleUnderscoreHeader) && cleanTitle.length <= 75 && !cleanTitle.includes(". ");
+
+  if (isMarkdownHeader || isShortBoldTitle || (isKnownSection && cleanTitle.length <= 75) || isColonSection) {
+    return (
+      <h4 key={idx} className="pnw-note-section-title">
+        {cleanTitle}
+      </h4>
+    );
+  }
+
+  // 3. Numbered steps (e.g. "1. ..." or "1) ...")
   const numberedMatch = trimmed.match(/^(\d+)[.)]\s+(.*)$/);
   if (numberedMatch) {
     return (
       <div key={idx} className="pnw-note-step">
         <span className="pnw-step-num">{numberedMatch[1]}</span>
-        <span>{numberedMatch[2]}</span>
+        <span>{renderInlineMarkdown(numberedMatch[2])}</span>
       </div>
     );
   }
 
-  if (/^[-•*]\s+/.test(trimmed)) {
+  // 4. Bullet Points (handles •, -, *, and Unicode bullets)
+  if (/^[-•*\u2022\u2023\u25E6\u2043\u2219▪▫–—]\s+/.test(trimmed)) {
+    const bulletContent = trimmed.replace(/^[-•*\u2022\u2023\u25E6\u2043\u2219▪▫–—]\s+/, "");
     return (
       <div key={idx} className="pnw-note-bullet">
         <span className="pnw-bullet-dot" />
-        <span>{trimmed.replace(/^[-•*]\s+/, "")}</span>
+        <span>{renderInlineMarkdown(bulletContent)}</span>
       </div>
     );
   }
 
-  const isSectionHeading =
-    (trimmed.endsWith(":") && trimmed.length <= 70) ||
-    /^(what is going on|your medicines|what to do and avoid|when to see your doctor|warning signs|summary|diagnosis|assessment|plan|medications|prescription|instructions|follow[- ]?up|advice|notes|symptoms|recommendations)\b[:\-]?$/i.test(
-      trimmed
-    );
-
-  if (isSectionHeading) {
-    return (
-      <h4 key={idx} className="pnw-note-section-title">
-        {trimmed.replace(/:$/, "")}
-      </h4>
-    );
-  }
-
+  // 5. Standard Paragraphs (with inline bold parsing)
   return (
     <p key={idx} className="pnw-note-paragraph">
-      {trimmed}
+      {renderInlineMarkdown(trimmed)}
     </p>
   );
 };
@@ -206,7 +281,7 @@ function printDoctorConsultation(note, activeTab, parsedSoap) {
       <div class="box">
         <div class="box-title">Doctor's Care Instructions &amp; Patient Advice</div>
         <div style="font-size: 13.5px; line-height: 1.8; color: #1e293b; white-space: pre-line; margin-top: 8px;">
-          ${note.patientNote || "No visit summary available."}
+          ${(note.patientNote || "No visit summary available.").replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}
         </div>
       </div>
       <div class="sign-area" style="margin-top: 60px; display: flex; justify-content: flex-end;">
@@ -619,6 +694,16 @@ export default function DoctorPatientHistory() {
   const handlePrint = (tabToPrint = activeTab) => {
     if (!activeNote) return;
     printDoctorConsultation(activeNote, tabToPrint, parsedSoap);
+    // HIPAA Audit Logging
+    API.post("/audit/log", {
+      action: "PRINT_CONSULTATION_NOTE",
+      patientId: activeNote.patientId,
+      resourceId: activeNote.id,
+      userId: user?.id,
+      userRole: user?.role || "doctor",
+      userName: user?.name,
+      details: { tab: tabToPrint, patientName: activeNote.patient?.name },
+    }).catch(() => {});
   };
 
   const handleCopy = () => {
@@ -650,6 +735,14 @@ export default function DoctorPatientHistory() {
 
     navigator.clipboard.writeText(contentToCopy);
     toast.success("Consultation content copied to clipboard!");
+
+    // HIPAA Audit Logging
+    API.post("/audit/log", {
+      action: "COPY_CONSULTATION_NOTE",
+      patientId: activeNote.patientId,
+      resourceId: activeNote.id,
+      details: { tab: activeTab, patientName: activeNote.patient?.name },
+    }).catch(() => {});
   };
 
   const handleDelete = async (noteId) => {
@@ -686,6 +779,7 @@ export default function DoctorPatientHistory() {
     medications: "",
     follow_up: "",
     quick_summary: "",
+    patient_status: "ACTIVE",
   });
 
   const handleOpenEditModal = (note = activeNote) => {
@@ -707,6 +801,7 @@ export default function DoctorPatientHistory() {
       medications: parsed.medications || "",
       follow_up: parsed.follow_up || "",
       quick_summary: parsed.quick_summary || "",
+      patient_status: parsed.patient_status || note.patient?.status || "ACTIVE",
     });
     setEditModalOpen(true);
   };
@@ -767,11 +862,16 @@ export default function DoctorPatientHistory() {
 
       toast.success("Consultation note approved and signed! Synced to EHR and Patient Portal.");
 
+      const newPatientStatus = res.data?.patientStatus;
       const updatedNote = res.data?.note || {
         ...activeNote,
         status: "APPROVED",
         finalNote: JSON.stringify(editFormData),
       };
+
+      if (newPatientStatus && updatedNote.patient) {
+        updatedNote.patient = { ...updatedNote.patient, status: newPatientStatus };
+      }
 
       setNotes((prev) =>
         prev.map((n) => (n.id === activeNote.id ? { ...n, ...updatedNote, status: "APPROVED" } : n))
@@ -1053,16 +1153,36 @@ export default function DoctorPatientHistory() {
                     <p className="pnw-item-snippet">{snippet}</p>
 
                     <div className="pnw-item-tags">
-                      <span
-                        className="pnw-spec-tag"
-                        style={{
-                          backgroundColor: palette.bg,
-                          color: palette.text,
-                          border: `1px solid ${palette.border}`,
-                        }}
-                      >
-                        {pat.status || "ACTIVE"}
-                      </span>
+                      {(() => {
+                        const st = getPatientStatusBadgeMeta(pat.status);
+                        return (
+                          <span
+                            className="pnw-spec-tag"
+                            style={{
+                              backgroundColor: st.bg,
+                              color: st.text,
+                              border: `1px solid ${st.border}`,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              fontWeight: "800",
+                              letterSpacing: "0.02em",
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: "6px",
+                                height: "6px",
+                                borderRadius: "50%",
+                                backgroundColor: st.dot,
+                                display: "inline-block",
+                                boxShadow: st.isPulse ? `0 0 0 2px ${st.border}` : "none",
+                              }}
+                            />
+                            {st.label}
+                          </span>
+                        );
+                      })()}
 
                       <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
                         {(() => {
@@ -1863,6 +1983,63 @@ export default function DoctorPatientHistory() {
                 gap: "16px",
               }}
             >
+              {/* Doctor Manual Patient Status Selection */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                  padding: "10px 14px",
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "12px", fontWeight: "800", color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Patient Status:
+                  </span>
+                  <span style={{ fontSize: "11px", color: "#64748b" }}>
+                    (Doctor manual selection)
+                  </span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  {[
+                    { id: "ACTIVE", label: "Active", bg: "#ecfdf5", text: "#059669", border: "#a7f3d0", dot: "#10b981" },
+                    { id: "CRITICAL", label: "Critical", bg: "#fef2f2", text: "#b91c1c", border: "#fecaca", dot: "#ef4444" },
+                    { id: "DISCHARGED", label: "Discharged", bg: "#f1f5f9", text: "#475569", border: "#cbd5e1", dot: "#94a3b8" },
+                  ].map((st) => {
+                    const isSelected = (editFormData.patient_status || "ACTIVE").toUpperCase() === st.id;
+                    return (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => setEditFormData((prev) => ({ ...prev, patient_status: st.id }))}
+                        style={{
+                          padding: "4px 12px",
+                          borderRadius: "999px",
+                          border: isSelected ? `2px solid ${st.text}` : `1px solid ${st.border}`,
+                          background: isSelected ? st.bg : "#ffffff",
+                          color: isSelected ? st.text : "#64748b",
+                          fontSize: "12px",
+                          fontWeight: isSelected ? "800" : "600",
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          boxShadow: isSelected ? "0 1px 4px rgba(0,0,0,0.06)" : "none",
+                        }}
+                      >
+                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: st.dot }} />
+                        {st.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Likely Diagnosis */}
               <div>
                 <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: "750", color: "#0284c7", textTransform: "uppercase", marginBottom: "6px" }}>

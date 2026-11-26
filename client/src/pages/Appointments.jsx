@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import API from "../api";
 import "../styles/appointment.css";
 import { useNavigate } from "react-router-dom";
@@ -7,6 +7,7 @@ import {
 } from "react-icons/bs";
 import {
   FaArrowLeft, FaChevronLeft, FaChevronRight, FaUserMd, FaUserInjured, FaExclamationCircle,
+  FaSearch, FaStethoscope, FaTimes, FaCheck,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import {
@@ -44,6 +45,64 @@ export default function Appointments() {
   const [bookedSlots, setBookedSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
+  // Unified Doctor & Specialty Dropdown State
+  const [docDropdownOpen, setDocDropdownOpen] = useState(false);
+  const [docSearchTerm, setDocSearchTerm] = useState("");
+  const docDropdownRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (docDropdownRef.current && !docDropdownRef.current.contains(e.target)) {
+        setDocDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Helper to identify if a doctor record belongs to the logged-in user
+  const isDoctorMe = (d) => {
+    if (!user || !d) return false;
+    return (
+      String(user.id) === String(d.userId) ||
+      String(user.id) === String(d.id) ||
+      (user.email && d.user?.email && d.user.email.toLowerCase() === user.email.toLowerCase()) ||
+      (user.name && d.name && (d.name.toLowerCase() === user.name.toLowerCase() || d.name.toLowerCase().includes(user.name.toLowerCase())))
+    );
+  };
+
+  // Filtered doctors based on unified search (doctor name + specialty + clinic)
+  const filteredDoctors = useMemo(() => {
+    const q = docSearchTerm.toLowerCase().trim();
+    let list = doctors;
+    if (q) {
+      list = doctors.filter((d) =>
+        d.name?.toLowerCase().includes(q) ||
+        d.specialty?.toLowerCase().includes(q) ||
+        d.clinicName?.toLowerCase().includes(q) ||
+        d.city?.toLowerCase().includes(q)
+      );
+    }
+    // Prioritize the logged-in doctor ("You") at the top
+    return [...list].sort((a, b) => {
+      const aIsMe = isDoctorMe(a) ? 1 : 0;
+      const bIsMe = isDoctorMe(b) ? 1 : 0;
+      return bIsMe - aIsMe;
+    });
+  }, [doctors, docSearchTerm, user]);
+
+  // Group matching doctors by specialty for clean, organized selection
+  const doctorsBySpecialty = useMemo(() => {
+    const groups = {};
+    filteredDoctors.forEach((d) => {
+      const spec = d.specialty || "General Medicine";
+      if (!groups[spec]) groups[spec] = [];
+      groups[spec].push(d);
+    });
+    return groups;
+  }, [filteredDoctors]);
+
   const fetchPatients = async () => {
     try {
       if (!user) return;
@@ -64,8 +123,24 @@ export default function Appointments() {
   };
 
   const fetchDoctors = async () => {
-    const res = await API.get("/doctors");
-    setDoctors(res.data);
+    try {
+      const res = await API.get("/doctors");
+      const list = res.data || [];
+      setDoctors(list);
+
+      // Pre-select the logged-in doctor by default ("You") if role is doctor
+      if (user?.role === "doctor") {
+        const myDoc = list.find((d) => isDoctorMe(d));
+        if (myDoc) {
+          setForm((prev) => ({
+            ...prev,
+            doctorId: prev.doctorId || myDoc.id,
+          }));
+        }
+      }
+    } catch (error) {
+      console.log("Failed to fetch doctors:", error);
+    }
   };
 
   const fetchAppointments = async () => {
@@ -152,9 +227,12 @@ export default function Appointments() {
       });
       toast.success("Appointment booked successfully!");
       fetchAppointments();
+      
+      // Keep the logged-in doctor pre-selected if user is a doctor
+      const myDoc = user?.role === "doctor" ? doctors.find((d) => isDoctorMe(d)) : null;
       setForm({
         patientId: user.role === "patient" ? form.patientId : "",
-        doctorId: "",
+        doctorId: myDoc ? myDoc.id : "",
         date: "",
         time: "",
       });
@@ -223,28 +301,137 @@ export default function Appointments() {
             </div>
           )}
 
-          {/* Doctor select */}
-          <div className="appt-form-group">
+          {/* Attending Doctor (Single Clean Unified Selection with Doctor & Specialty Search) */}
+          <div className="appt-form-group appt-unified-doc-group" ref={docDropdownRef}>
             <label className="appt-form-label">
               <FaUserMd /> Attending Doctor
             </label>
-            <select
-              className="appt-form-select"
-              value={form.doctorId}
-              onChange={(e) => {
-                setForm({ ...form, doctorId: e.target.value });
-                setErrors({ ...errors, doctorId: "" });
-              }}
-            >
-              <option value="">Choose a doctor...</option>
-              {doctors.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} — {d.specialty}
-                </option>
-              ))}
-            </select>
+
+            <div className="appt-unified-doc-wrapper">
+              {/* If a doctor is selected and dropdown is closed, show clean selection with quick-clear */}
+              {selectedDoctorObj && !docDropdownOpen ? (
+                <div
+                  className="appt-selected-doc-box"
+                  onClick={() => {
+                    setDocDropdownOpen(true);
+                    setDocSearchTerm("");
+                  }}
+                  title="Click to change attending doctor"
+                >
+                  <div className="appt-selected-doc-info">
+                    <span className="appt-selected-doc-name">{selectedDoctorObj.name}</span>
+                    {isDoctorMe(selectedDoctorObj) && <span className="appt-doc-you-tag">You</span>}
+                    <span className="appt-selected-doc-spec">{selectedDoctorObj.specialty}</span>
+                    {selectedDoctorObj.clinicName && (
+                      <span className="appt-selected-doc-clinic">({selectedDoctorObj.clinicName})</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="appt-selected-doc-remove"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setForm((prev) => ({ ...prev, doctorId: "" }));
+                      setDocSearchTerm("");
+                      setDocDropdownOpen(true);
+                    }}
+                    title="Change doctor"
+                  >
+                    <FaTimes />
+                  </button>
+                </div>
+              ) : (
+                /* Single unified search & selection input */
+                <div className="appt-doc-search-single">
+                  <FaSearch className="appt-doc-search-single-icon" />
+                  <input
+                    type="text"
+                    className="appt-form-input appt-doc-search-single-input"
+                    placeholder="Search doctor or specialty (e.g. Cardiology, Dr. John)..."
+                    value={docSearchTerm}
+                    onFocus={() => setDocDropdownOpen(true)}
+                    onChange={(e) => {
+                      setDocSearchTerm(e.target.value);
+                      if (!docDropdownOpen) setDocDropdownOpen(true);
+                    }}
+                  />
+                  {docSearchTerm && (
+                    <button
+                      type="button"
+                      className="appt-doc-search-single-clear"
+                      onClick={() => setDocSearchTerm("")}
+                      title="Clear search"
+                    >
+                      <FaTimes />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Unified Floating Dropdown Menu Grouped by Specialty */}
+              {docDropdownOpen && (
+                <div className="appt-unified-doc-dropdown">
+                  {filteredDoctors.length === 0 ? (
+                    <div className="appt-doc-empty-state">
+                      No doctors or specialties found matching "{docSearchTerm}"
+                    </div>
+                  ) : (
+                    <div className="appt-doc-list-scroll">
+                      {Object.entries(doctorsBySpecialty).map(([specialty, docList]) => (
+                        <div key={specialty} className="appt-doc-spec-section">
+                          <div className="appt-doc-spec-badge-header">
+                            <FaStethoscope className="appt-spec-header-icon" />
+                            <span>{specialty}</span>
+                            <span className="appt-spec-header-count">{docList.length}</span>
+                          </div>
+                          {docList.map((d) => {
+                            const isSelected = String(form.doctorId) === String(d.id);
+                            const isCurrentUser = isDoctorMe(d);
+                            return (
+                              <div
+                                key={d.id}
+                                className={`appt-doc-dropdown-item ${isSelected ? "selected" : ""}`}
+                                onClick={() => {
+                                  setForm((prev) => ({ ...prev, doctorId: d.id }));
+                                  setErrors((prev) => ({ ...prev, doctorId: "" }));
+                                  setDocDropdownOpen(false);
+                                  setDocSearchTerm("");
+                                }}
+                              >
+                                <div className="appt-doc-dropdown-avatar">
+                                  {d.name?.[0]?.toUpperCase() || "D"}
+                                </div>
+                                <div className="appt-doc-dropdown-meta">
+                                  <div className="appt-doc-dropdown-title-row">
+                                    <span className="appt-doc-dropdown-name">{d.name}</span>
+                                    {isCurrentUser && <span className="appt-doc-you-tag">You</span>}
+                                    <span className="appt-doc-dropdown-pill">{d.specialty}</span>
+                                  </div>
+                                  {d.clinicName && (
+                                    <div className="appt-doc-dropdown-clinic">
+                                      {d.clinicName}{d.city ? `, ${d.city}` : ""}
+                                    </div>
+                                  )}
+                                </div>
+                                {isSelected && (
+                                  <FaCheck className="appt-doc-dropdown-check" />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {errors.doctorId && (
-              <span className="appt-field-error"><FaExclamationCircle style={{ marginRight: 4, fontSize: 11 }} />{errors.doctorId}</span>
+              <span className="appt-field-error">
+                <FaExclamationCircle style={{ marginRight: 4, fontSize: 11 }} />
+                {errors.doctorId}
+              </span>
             )}
           </div>
 
@@ -344,7 +531,7 @@ export default function Appointments() {
             <BsCalendar2Check />
             Scheduled Appointments
           </h3>
-          <span className="appt-list-count">{appointments.length} shown</span>
+          <span className="appt-list-count">{appointments.length} total</span>
         </div>
 
         {appointments.length === 0 ? (
